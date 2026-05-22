@@ -108,12 +108,18 @@ def run_pca_svd(face1: np.ndarray, face2: np.ndarray):
     cos_eigen = cosine_sim(w1, w2)
     euc_d     = float(np.linalg.norm(w1 - w2))
     euc_sim   = 1.0 / (1.0 + euc_d)
-    ssim      = ssim_simple(face1, face2)
+    
+    # Kita tetap menghitungnya untuk ditampilkan di UI (meski tidak dipakai di skor akhir)
+    ssim      = ssim_simple(f1, f2)
     cos_pixel = cosine_sim(f1, f2)
-
-    raw_composite = 0.35 * max(0, cos_eigen) + 0.25 * euc_sim + 0.30 * ssim + 0.10 * max(0, cos_pixel)
-
-    composite = float(raw_composite)
+    
+    # TIE-BREAKER: Pinalti Jarak Euclidean
+    # Jika arah kosinusnya sama (mirip) tapi jarak vektornya berjauhan (orang berbeda/adik),
+    # kita berikan diskon pemotongan skor maksimal 20%.
+    penalty_factor = 0.80 + (0.20 * euc_sim)
+    
+    # Karena ini tugas Aljabar Linear, skor akhir WAJIB mencerminkan hasil SVD/PCA.
+    composite = float(max(0, cos_eigen)) * penalty_factor
 
     def sv_info(S):
         total = np.sum(S**2)
