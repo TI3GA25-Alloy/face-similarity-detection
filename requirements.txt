@@ -5,6 +5,3 @@ numpy
 pillow
 jinja2
 python-multipart
-streamlit
-matplotlib
-scikit-learn
