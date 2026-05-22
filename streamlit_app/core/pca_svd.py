@@ -117,6 +117,30 @@ def load_custom_selfie_dataset(base_path: str, target_size: Tuple[int, int] = (6
     }
 
 
+def load_pretrained_eigenspace(filepath: str) -> Optional[Dict]:
+    import os
+    if not os.path.exists(filepath):
+        return None
+    try:
+        data = np.load(filepath)
+        n = data['n_samples'].item() if data['n_samples'].ndim == 0 else data['n_samples'][0]
+        k = data['k_components'].item() if data['k_components'].ndim == 0 else data['k_components'][0]
+        shape = tuple(data['image_shape'])
+        
+        return {
+            "mean_face": data['mean_face'],
+            "eigenfaces": data['eigenfaces'],
+            "singular_values": data['singular_values'],
+            "explained_variance_pct": data['explained_variance_pct'],
+            "n_samples": n,
+            "n_components": k,
+            "image_shape": shape,
+            "source": f"Pretrained Colab Model ({n} foto)",
+            "description": f"Model dilatih di Colab. Menggunakan {k} Eigenfaces."
+        }
+    except Exception:
+        return None
+
 def compute_mean_face(images: np.ndarray) -> np.ndarray:
     return np.mean(images, axis=0)
 

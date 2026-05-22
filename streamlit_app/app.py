@@ -18,6 +18,7 @@ from core.pca_svd import (
     load_olivetti_dataset,
     load_lfw_dataset,
     load_custom_selfie_dataset,
+    load_pretrained_eigenspace,
     build_eigenspace_from_dataset,
     analyze_two_faces_with_dataset,
     analyze_two_faces,
@@ -275,6 +276,21 @@ def get_eigenspace_lfw(k):
 
 @st.cache_resource(show_spinner=False)
 def get_eigenspace_custom(k):
+    # Coba muat model pre-trained (Colab)
+    model_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pretrained_eigenspace.npz")
+    eigenspace = load_pretrained_eigenspace(model_path)
+    
+    if eigenspace is not None:
+        data = {
+            "source": eigenspace["source"],
+            "description": eigenspace["description"],
+            "n_samples": eigenspace["n_samples"],
+            "n_people": "?",
+            "image_shape": eigenspace["image_shape"]
+        }
+        return data, eigenspace
+
+    # Fallback ke training lokal jika model tidak ada (namun dataset lokal masih ada)
     base_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Selfie & id data - public sample")
     data = load_custom_selfie_dataset(base_path, target_size=(128, 128))
     if data is None:
