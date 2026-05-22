@@ -49,9 +49,9 @@ def preprocess_image(image_b64: str):
         x1, y1 = max(0, x - pad), max(0, y - pad)
         x2, y2 = min(W, x + w + pad), min(H, y + h + pad)
         gray = gray[y1:y2, x1:x2]
-
+        gray = cv2.equalizeHist(gray)
     resized    = cv2.resize(gray, TARGET_SIZE, interpolation=cv2.INTER_AREA)
-    normalized = resized.astype(np.float64)
+    normalized = resized.astype(np.float64) / 255.0
 
     return normalized, face_detected
 
@@ -63,15 +63,13 @@ def cosine_sim(a, b):
 
 def ssim_simple(img1, img2):
     a, b   = img1.flatten(), img2.flatten()
-    C1, C2 = (0.01 * 255)**2, (0.03 * 255)**2
+    C1, C2 = 0.01**2, 0.03**2
     mu1, mu2   = np.mean(a), np.mean(b)
     s1, s2     = np.var(a), np.var(b)
     s12        = np.mean((a - mu1) * (b - mu2))
     num = (2*mu1*mu2 + C1) * (2*s12 + C2)
     den = (mu1**2 + mu2**2 + C1) * (s1 + s2 + C2)
     return float(np.clip(num / den if den != 0 else 0, 0, 1))
-
-# ─── Core PCA/SVD Pipeline ────────────────────────────────────────────────────
 
 def run_pca_svd(face1: np.ndarray, face2: np.ndarray):
     f1, f2 = face1.flatten(), face2.flatten()
@@ -81,15 +79,13 @@ def run_pca_svd(face1: np.ndarray, face2: np.ndarray):
     U2, S2, _  = np.linalg.svd(face2, full_matrices=False)
 
     if PRETRAINED is not None:
-        # ✅ BENAR: Menggunakan Eigenspace global hasil training raksasa!
         ef = PRETRAINED["eigenfaces"]
         mf = PRETRAINED["mean_face"]
         w1 = ef @ (f1 - mf)
         w2 = ef @ (f2 - mf)
         S_joint = PRETRAINED["singular_values"]
-        eigenvalues = (S_joint ** 2) / 2 # dummy approx scale for chart
+        eigenvalues = (S_joint ** 2) / 2
     else:
-        # ❌ SALAH: SVD instan hanya dari 2 gambar (fallback jika file tidak ada)
         stack = np.stack([f1, f2], axis=0)
         mf = np.mean(stack, axis=0)
         centered = stack - mf
@@ -100,15 +96,15 @@ def run_pca_svd(face1: np.ndarray, face2: np.ndarray):
         w1 = ef @ (f1 - mf)
         w2 = ef @ (f2 - mf)
 
-    # Similarity scores
     cos_eigen = cosine_sim(w1, w2)
     euc_d     = float(np.linalg.norm(w1 - w2))
     euc_sim   = 1.0 / (1.0 + euc_d)
     ssim      = ssim_simple(face1, face2)
     cos_pixel = cosine_sim(f1, f2)
-    
-    # Composite score formula
-    composite = 0.45*max(0, cos_eigen) + 0.25*euc_sim + 0.20*ssim + 0.10*max(0, cos_pixel)
+
+    raw_composite = 0.35 * max(0, cos_eigen) + 0.25 * euc_sim + 0.30 * ssim + 0.10 * max(0, cos_pixel)
+
+    composite = float(raw_composite)
 
     def sv_info(S):
         total = np.sum(S**2)
@@ -138,8 +134,7 @@ def run_pca_svd(face1: np.ndarray, face2: np.ndarray):
 
 def make_decision(composite: float, cos_eigen: float, threshold: float = 0.70):
     is_same = composite >= threshold
-    
-    # Kalibrasi threshold khusus untuk PCA (karena PCA sangat ketat terhadap variasi piksel)
+
     if   composite >= 0.85: level, confidence, color = "Sangat Mirip", "Sangat Tinggi", "#10b981"
     elif composite >= 0.75: level, confidence, color = "Mirip", "Tinggi", "#22c55e"
     elif composite >= 0.65: level, confidence, color = "Cukup Mirip", "Sedang", "#f59e0b"
