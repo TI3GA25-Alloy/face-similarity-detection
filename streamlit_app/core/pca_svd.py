@@ -132,9 +132,12 @@ def load_pretrained_eigenspace(filepath: str) -> Optional[Dict]:
             "eigenfaces": data['eigenfaces'],
             "singular_values": data['singular_values'],
             "explained_variance_pct": data['explained_variance_pct'],
+            "explained_variance_ratio": data['explained_variance_pct'] / 100.0,
+            "eigenvalues": (data['singular_values'] ** 2) / max(1, n),
             "n_samples": n,
             "n_components": k,
             "image_shape": shape,
+            "target_size": shape,
             "source": f"Pretrained Colab Model ({n} foto)",
             "description": f"Model dilatih di Colab. Menggunakan {k} Eigenfaces."
         }
@@ -227,6 +230,8 @@ def resize_face_for_eigenspace(
     face: np.ndarray,
     target_size: Tuple[int, int] = (64, 64),
 ) -> np.ndarray:
+    if face.shape == target_size:
+        return face.astype(np.float64)
     import cv2
     return cv2.resize(
         face.astype(np.float32),

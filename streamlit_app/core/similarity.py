@@ -1,8 +1,8 @@
 import numpy as np
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict, Any
 
 
-DECISION_THRESHOLD = 0.70
+DECISION_THRESHOLD = 0.68
 
 THRESHOLDS = {
     "identical"   : 0.95,
@@ -53,12 +53,12 @@ def compute_all_metrics(
     euc_sim    = normalized_euclidean_similarity(weights1, weights2)
     ssim_score = structural_similarity_pixels(face1_pixel, face2_pixel)
     pixel_cos  = cosine_similarity(face1_pixel, face2_pixel)
-    composite  = (
-        0.45 * max(0.0, cos_sim) +
-        0.25 * euc_sim +
-        0.20 * ssim_score +
-        0.10 * max(0.0, pixel_cos)
-    )
+    # TIE-BREAKER: Pinalti Jarak Euclidean
+    # Diperingan menjadi 0.90 + 0.10 (sebelumnya 0.80 + 0.20)
+    # Karena foto lama (blur) dan foto baru (tajam) memiliki perbedaan magnitudo yang besar.
+    penalty_factor = 0.90 + (0.10 * euc_sim)
+
+    composite = float(max(0, cos_sim)) * penalty_factor
     return {
         "cosine_similarity_eigenspace" : round(cos_sim, 4),
         "euclidean_distance_eigenspace": round(euc_dist, 4),
@@ -72,7 +72,7 @@ def compute_all_metrics(
 def make_decision(
     metrics: Dict[str, float],
     threshold: float = DECISION_THRESHOLD,
-) -> Dict:
+) -> Dict[str, Any]:
     score   = metrics["composite_score"]
     cos     = metrics["cosine_similarity_eigenspace"]
     is_same = score >= threshold

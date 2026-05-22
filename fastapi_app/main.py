@@ -37,33 +37,44 @@ def extract_edges(img):
     magnitude = cv2.magnitude(sobelx, sobely)
     return cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
 
-def preprocess_image(image_b64: str):
-    img_bytes = base64.b64decode(image_b64.split(",")[-1])
-    pil_img   = Image.open(BytesIO(img_bytes)).convert("RGB")
-    np_img    = np.array(pil_img)
-    img_gray  = cv2.cvtColor(np_img, cv2.COLOR_RGB2GRAY)
+def detect_and_crop(contents: str):
+    import base64
+    if "," in contents:
+        contents = contents.split(",")[1]
+    img_bytes = base64.b64decode(contents)
+    img_array = np.frombuffer(img_bytes, np.uint8)
+    img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+    if img is None:
+        raise ValueError("Gambar tidak valid")
+    
+    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
     cascade = cv2.CascadeClassifier(HAAR_FRONTAL)
     faces = cascade.detectMultiScale(img_gray, 1.1, 5, minSize=(30, 30))
     
-    face_detected = len(faces) > 0
-    if face_detected:
+    if len(faces) > 0:
         faces = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
         x, y, w, h = faces[0]
         pad = int(min(w, h) * 0.2)
         H, W = img_gray.shape
         x1, y1 = max(0, x - pad), max(0, y - pad)
         x2, y2 = min(W, x + w + pad), min(H, y + h + pad)
-        gray = img_gray[y1:y2, x1:x2]
-        gray = cv2.equalizeHist(gray)
-    else:
-        gray = cv2.equalizeHist(img_gray)
+        return img_gray[y1:y2, x1:x2], True
+    return img_gray, False
+
+def process_cropped(gray, angle=0.0):
+    if angle != 0.0:
+        h, w = gray.shape[:2]
+        center = (w // 2, h // 2)
+        M = cv2.getRotationMatrix2D(center, angle, 1.0)
+        gray = cv2.warpAffine(gray, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    gray = clahe.apply(gray)
         
     resized    = cv2.resize(gray, TARGET_SIZE, interpolation=cv2.INTER_AREA)
     edge_map   = extract_edges(resized)
-    normalized = edge_map.astype(np.float64) / 255.0
-
-    return normalized, face_detected
+    return edge_map.astype(np.float64) / 255.0
 
 def cosine_sim(a, b):
     na, nb = np.linalg.norm(a), np.linalg.norm(b)
@@ -116,7 +127,7 @@ def run_pca_svd(face1: np.ndarray, face2: np.ndarray):
     # TIE-BREAKER: Pinalti Jarak Euclidean
     # Jika arah kosinusnya sama (mirip) tapi jarak vektornya berjauhan (orang berbeda/adik),
     # kita berikan diskon pemotongan skor maksimal 20%.
-    penalty_factor = 0.80 + (0.20 * euc_sim)
+    penalty_factor = 0.90 + (0.10 * euc_sim)
     
     # Karena ini tugas Aljabar Linear, skor akhir WAJIB mencerminkan hasil SVD/PCA.
     composite = float(max(0, cos_eigen)) * penalty_factor
@@ -147,7 +158,7 @@ def run_pca_svd(face1: np.ndarray, face2: np.ndarray):
     }
 
 
-def make_decision(composite: float, cos_eigen: float, threshold: float = 0.70):
+def make_decision(composite: float, cos_eigen: float, threshold: float = 0.60):
     is_same = composite >= threshold
 
     if   composite >= 0.85: level, confidence, color = "Sangat Mirip", "Sangat Tinggi", "#10b981"
@@ -178,15 +189,28 @@ async def analyze(request: Request):
         body      = await request.json()
         image1_b64 = body.get("image1")
         image2_b64 = body.get("image2")
-        threshold  = float(body.get("threshold", 0.70))
+        threshold  = float(body.get("threshold", 0.68))
 
         if not image1_b64 or not image2_b64:
             return JSONResponse({"error": "Kedua gambar diperlukan"}, status_code=400)
 
-        face1, detected1 = preprocess_image(image1_b64)
-        face2, detected2 = preprocess_image(image2_b64)
+        crop1, detected1 = detect_and_crop(image1_b64)
+        crop2, detected2 = detect_and_crop(image2_b64)
 
-        result   = run_pca_svd(face1, face2)
+        face1 = process_cropped(crop1, angle=0.0)
+
+        best_cos = -1.0
+        best_result = None
+
+        for angle in [0.0, -10.0, 10.0, -5.0, 5.0]:
+            f2 = process_cropped(crop2, angle=angle)
+            res = run_pca_svd(face1, f2)
+            c = res["metrics"]["cosine_similarity_eigenspace"]
+            if c > best_cos:
+                best_cos = c
+                best_result = res
+
+        result = best_result
         decision = make_decision(
             result["metrics"]["composite_score"],
             result["metrics"]["cosine_similarity_eigenspace"],

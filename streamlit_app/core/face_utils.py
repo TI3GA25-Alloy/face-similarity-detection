@@ -38,35 +38,52 @@ def crop_face(gray_image: np.ndarray, bbox: Tuple[int, int, int, int], padding: 
     return gray_image[y1:y2, x1:x2]
 
 
-def resize_and_normalize(gray_image: np.ndarray, target_size: Tuple[int, int] = TARGET_SIZE) -> np.ndarray:
-    resized = cv2.resize(gray_image, target_size, interpolation=cv2.INTER_AREA)
-    return cv2.equalizeHist(resized).astype(np.float64) / 255.0
-
-
 def apply_gaussian_blur(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
     return cv2.GaussianBlur(image, (kernel_size, kernel_size), 0)
+
+
+def extract_edges(img: np.ndarray) -> np.ndarray:
+    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
+    sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
+    magnitude = cv2.magnitude(sobelx, sobely)
+    return cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
 
 
 def preprocess_face(
     gray_image: np.ndarray,
     detect: bool = True,
     target_size: Tuple[int, int] = TARGET_SIZE,
-    blur: bool = True,
+    blur: bool = False,
+    angle: float = 0.0,
+    pre_bbox: Optional[Tuple[int, int, int, int]] = None
 ) -> Tuple[np.ndarray, dict]:
     info      = {"face_detected": False, "bbox": None}
     face_crop = gray_image
 
     if detect:
-        bbox = detect_face(gray_image)
+        bbox = pre_bbox if pre_bbox is not None else detect_face(gray_image)
         if bbox is not None:
             info["face_detected"] = True
             info["bbox"]          = bbox
             face_crop             = crop_face(gray_image, bbox)
+            
+    if angle != 0.0:
+        h, w = face_crop.shape[:2]
+        center = (w // 2, h // 2)
+        M = cv2.getRotationMatrix2D(center, angle, 1.0)
+        face_crop = cv2.warpAffine(face_crop, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    face_crop = clahe.apply(face_crop)
 
     if blur:
         face_crop = apply_gaussian_blur(face_crop)
 
-    return resize_and_normalize(face_crop, target_size), info
+    resized = cv2.resize(face_crop, target_size, interpolation=cv2.INTER_AREA)
+    edge_map = extract_edges(resized)
+    normalized = edge_map.astype(np.float64) / 255.0
+    
+    return normalized, info
 
 
 def draw_face_box(original_image: np.ndarray, bbox: Tuple[int, int, int, int]) -> np.ndarray:

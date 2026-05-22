@@ -164,15 +164,15 @@ p { color: var(--text-secondary) !important; }
 st.markdown("""
 <div class="app-header">
   <div style="position:relative;z-index:1">
-    <div class="app-title">FaceMatch <span style="opacity:0.5">/</span> PCA & SVD</div>
+    <div class="app-title">FaceMatch <span style="opacity:0.5">/</span> Edge-PCA & SVD</div>
     <div style="color:rgba(199,210,254,0.65);font-size:1.125rem;margin-bottom:1rem;font-weight:500;">
-      Deteksi Kemiripan Foto Lama vs Foto Baru menggunakan implementasi Eigenfaces Aljabar Linear.
+      Deteksi Kemiripan Foto Lama vs Foto Baru menggunakan implementasi Edge-PCA Aljabar Linear + Euclidean Tie-Breaker.
     </div>
     <div class="badge-row">
       <span class="badge">📐 Aljabar Linear</span>
-      <span class="badge">🧮 Eigenvalue</span>
+      <span class="badge">🧮 Sobel Edge</span>
       <span class="badge">🔢 SVD</span>
-      <span class="badge">📦 Dataset Olivetti/LFW</span>
+      <span class="badge">⚖️ Pinalti Euclidean</span>
       <span class="badge">📊 PCA</span>
     </div>
   </div>
@@ -226,7 +226,7 @@ with st.sidebar:
     st.divider()
     st.markdown("## ⚙️ Parameter")
 
-    threshold = st.slider("Ambang Batas Kemiripan", 0.40, 0.95, 0.70, 0.01)
+    threshold = st.slider("Ambang Batas Kemiripan", 0.40, 0.95, 0.68, 0.01)
     detect_face_opt = st.toggle("Auto Deteksi Wajah", value=True)
     show_eigenfaces = st.toggle("Tampilkan Eigenfaces Dataset", value=True)
     show_math = st.toggle("Penjelasan Matematis", value=True)
@@ -360,7 +360,7 @@ if use_dataset and dataset_data and eigenspace:
       <div style="margin-top:0.75rem;font-size:0.78rem;color:#64748b">
         Untuk menangkap 95% variance dibutuhkan <strong style="color:#a78bfa">{k95} eigenfaces</strong>
         dari {img_shape[0]*img_shape[1]:,} dimensi asli
-        &#8594; reduksi dimensi <strong style="color:#6ee7b7">{img_shape[0]*img_shape[1]//max(k95,1)}x lebih kecil</strong>
+        &#8594; reduksi dimensi <strong style="color:#6ee7b7">{(img_shape[0]*img_shape[1]//max(k95,1)) if isinstance(k95, int) else '?'}x lebih kecil</strong>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -431,29 +431,61 @@ if file1 and file2:
         gray2 = load_image_from_pil(pil2)
 
         face1_proc, info1 = preprocess_face(gray1, detect=detect_face_opt)
-        face2_proc, info2 = preprocess_face(gray2, detect=detect_face_opt)
+        # Rotation Search on Photo 2 for Pose Invariance
+        best_cos = -1.0
+        best_metrics = None
+        best_decision = None
+        best_face2_proc = None
+        best_info2 = None
+        best_result = None
 
-        if use_dataset and eigenspace is not None:
-            result = analyze_two_faces_with_dataset(face1_proc, face2_proc, eigenspace)
-            face1_display = result["face1_resized"]
-            face2_display = result["face2_resized"]
-            target_sz = eigenspace.get("target_size", (64, 64))
-            mode_label = "Dataset: " + dataset_data.get("source", "")[:40]
-        else:
-            result = analyze_two_faces(face1_proc, face2_proc)
-            face1_display = face1_proc
-            face2_display = face2_proc
-            target_sz = (128, 128)
-            mode_label = "Mode: 2 gambar saja (tanpa dataset)"
+        # To avoid re-detecting bbox multiple times, detect once:
+        bbox2 = None
+        if detect_face_opt:
+            bbox2 = detect_face(gray2)
 
+        for angle in [0.0, -10.0, 10.0, -5.0, 5.0]:
+            f2_proc, i2 = preprocess_face(gray2, detect=detect_face_opt, angle=angle, pre_bbox=bbox2)
+            
+            if use_dataset and eigenspace is not None:
+                res = analyze_two_faces_with_dataset(face1_proc, f2_proc, eigenspace)
+                f1_disp = res["face1_resized"]
+                f2_disp = res["face2_resized"]
+                target_sz = eigenspace.get("target_size", (64, 64))
+                m_label = "Dataset: " + dataset_data.get("source", "")[:40]
+            else:
+                res = analyze_two_faces(face1_proc, f2_proc)
+                f1_disp = face1_proc
+                f2_disp = f2_proc
+                target_sz = (128, 128)
+                m_label = "Mode: 2 gambar saja (tanpa dataset)"
+                
+            w1 = res["weights_face1"]
+            w2 = res["weights_face2"]
+            mets = compute_all_metrics(w1, w2, f1_disp, f2_disp)
+            
+            if mets["cosine_similarity_eigenspace"] > best_cos:
+                best_cos = mets["cosine_similarity_eigenspace"]
+                best_metrics = mets
+                best_result = res
+                best_face2_proc = f2_proc
+                best_info2 = i2
+                mode_label = f"{m_label} | Rotasi: {angle}°"
+                
+        # Commit the best rotation results
+        face2_proc = best_face2_proc
+        info2 = best_info2
+        result = best_result
+        metrics = best_metrics
+        decision = make_decision(metrics, threshold=threshold)
+        
+        face1_display = result["face1_resized"] if use_dataset else face1_proc
+        face2_display = result["face2_resized"] if use_dataset else face2_proc
+        
         w1 = result["weights_face1"]
         w2 = result["weights_face2"]
-
         U1, S1, Vt1 = result["svd_face1"]["U"], result["svd_face1"]["S"], result["svd_face1"]["Vt"]
         U2, S2, Vt2 = result["svd_face2"]["U"], result["svd_face2"]["S"], result["svd_face2"]["Vt"]
-
-        metrics  = compute_all_metrics(w1, w2, face1_display, face2_display)
-        decision = make_decision(metrics, threshold=threshold)
 
     st.markdown('<div class="section-title">🖼️ Pratinjau Foto</div>', unsafe_allow_html=True)
 
@@ -487,7 +519,7 @@ if file1 and file2:
       <div style="font-size:3rem;margin-bottom:0.5rem">{'&#x2705;' if is_same else '&#x274c;'}</div>
       <div style="font-size:1.5rem;font-weight:800;color:{s_color};margin-bottom:0.3rem">{verdict_display}</div>
       <div style="font-size:3.5rem;font-weight:900;color:{s_color};line-height:1;margin:0.5rem 0">{score:.1%}</div>
-      <div style="color:#64748b;font-size:0.85rem;margin-bottom:0.75rem">Composite Similarity Score</div>
+      <div style="color:#64748b;font-size:0.85rem;margin-bottom:0.75rem">Composite Score (Edge-PCA + Pinalti Euclidean)</div>
       <div style="display:flex;justify-content:center;gap:0.75rem;flex-wrap:wrap">
         <span style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);
                      border-radius:50px;padding:0.3rem 0.85rem;font-size:0.75rem;color:{s_color}">
@@ -654,9 +686,8 @@ cos(theta)   = {float(np.dot(w1,w2)):.4f} / ({float(np.linalg.norm(w1)):.4f} x {
 Euclidean distance:
 d = norm(w1 - w2) = {euc_val:.4f}
 
-Composite Score:
-= 0.45 x {max(0,cos_val):.4f} + 0.25 x {m['euclidean_similarity_norm']:.4f}
-+ 0.20 x {m['ssim_pixel']:.4f} + 0.10 x {max(0,m['cosine_similarity_pixel']):.4f}
+Composite Score (Edge-PCA + Tie-Breaker):
+= max(0, cos_val) x penalty_factor
 = {score:.4f}  ->  {score*100:.2f}%
 
 Threshold = {threshold:.0%}  ->  {'SAMA' if is_same else 'BERBEDA'}</div>
