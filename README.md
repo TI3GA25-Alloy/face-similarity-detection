@@ -1,4 +1,5 @@
-(ver)
+![Vercel](https://img.shields.io/badge/vercel-%23000000.svg?style=for-the-badge&logo=vercel&logoColor=white)()
+![Streamlit](https://img.shields.io/badge/Streamlit-%23FE4B4B.svg?style=for-the-badge&logo=streamlit&logoColor=white)(https://face-verification-v1.streamlit.app/)
 
 # 🔬 FaceMatch — Deteksi Kemiripan Foto Menggunakan PCA & SVD
 
