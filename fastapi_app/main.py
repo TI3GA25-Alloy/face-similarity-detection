@@ -15,7 +15,6 @@ TARGET_SIZE = (64, 64)
 HAAR_FRONTAL = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 
 def get_npz_path():
-    # Try multiple common paths for Vercel Serverless
     paths = [
         Path(__file__).parent.parent / "pretrained_eigenspace.npz",
         Path(os.getcwd()) / "pretrained_eigenspace.npz",
