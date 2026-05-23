@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Tuple, Optional, Dict, Any
+from typing import Dict, Any
 
 
 DECISION_THRESHOLD = 0.68
@@ -23,11 +23,6 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 
 
 def mahalanobis_cosine_sim(w1: np.ndarray, w2: np.ndarray, S: np.ndarray) -> float:
-    """
-    Computes Cosine Similarity using Mahalanobis Scaling (Whitening Transformation).
-    Instead of dropping components, it scales every weight by the inverse of its Singular Value.
-    Mathematically: w_scaled = \Sigma^{-1} w
-    """
     epsilon = 1e-5
     w1_scaled = w1 / (S + epsilon)
     w2_scaled = w2 / (S + epsilon)
@@ -35,9 +30,6 @@ def mahalanobis_cosine_sim(w1: np.ndarray, w2: np.ndarray, S: np.ndarray) -> flo
 
 
 def ssim_simple(img1: np.ndarray, img2: np.ndarray) -> float:
-    """
-    Calculates Structural Similarity Index (SSIM) roughly for pixel-based comparison.
-    """
     a, b = img1.flatten(), img2.flatten()
     C1, C2 = 0.01**2, 0.03**2
     mu1, mu2 = np.mean(a), np.mean(b)
@@ -55,10 +47,6 @@ def compute_all_metrics(
     face2_display: np.ndarray,
     S_joint: np.ndarray
 ) -> Dict[str, float]:
-    """
-    Computes all similarity metrics for the Streamlit UI.
-    Uses Mahalanobis Cosine Similarity.
-    """
     cos_eigen = mahalanobis_cosine_sim(weights1, weights2, S_joint)
     
     epsilon = 1e-5
@@ -70,8 +58,7 @@ def compute_all_metrics(
     
     ssim = ssim_simple(face1_display, face2_display)
     cos_pixel = cosine_similarity(face1_display.flatten(), face2_display.flatten())
-    
-    # Tie-Breaker Penalty
+
     penalty_factor = 0.90 + (0.10 * euc_sim)
     composite = float(max(0, cos_eigen)) * penalty_factor
     return {
