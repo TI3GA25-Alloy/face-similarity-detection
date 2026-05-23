@@ -28,12 +28,6 @@ if os.path.exists(NPZ_PATH):
     except Exception as e:
         print(f"❌ Error loading .npz: {e}")
 
-def extract_edges(img):
-    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
-    sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
-    magnitude = cv2.magnitude(sobelx, sobely)
-    return cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-
 def detect_and_crop(contents: str):
     if "," in contents:
         contents = contents.split(",")[1]
@@ -80,9 +74,8 @@ def process_cropped(gray, angle=0.0):
     gray = clahe.apply(gray)
         
     resized = cv2.resize(gray, TARGET_SIZE, interpolation=cv2.INTER_AREA)
-    edge_map = extract_edges(resized)
-    masked_edges = apply_elliptical_mask(edge_map)
-    return masked_edges.astype(np.float64) / 255.0
+    masked_gray = apply_elliptical_mask(resized)
+    return masked_gray.astype(np.float64) / 255.0
 
 def cosine_sim(a, b):
     """

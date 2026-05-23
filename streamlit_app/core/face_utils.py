@@ -42,13 +42,6 @@ def apply_gaussian_blur(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
     return cv2.GaussianBlur(image, (kernel_size, kernel_size), 0)
 
 
-def extract_edges(img: np.ndarray) -> np.ndarray:
-    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
-    sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
-    magnitude = cv2.magnitude(sobelx, sobely)
-    return cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-
-
 def apply_elliptical_mask(image: np.ndarray) -> np.ndarray:
     """
     Applies an elliptical mask to remove background, hair, and ear edges.
@@ -98,10 +91,9 @@ def preprocess_face(
 
     resized = cv2.resize(face_crop, target_size, interpolation=cv2.INTER_AREA)
     
-    edge_map = extract_edges(resized)
-    masked_edges = apply_elliptical_mask(edge_map)
+    masked_gray = apply_elliptical_mask(resized)
     
-    normalized = masked_edges.astype(np.float64) / 255.0
+    normalized = masked_gray.astype(np.float64) / 255.0
     return normalized, info
 
 
