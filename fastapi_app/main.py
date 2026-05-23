@@ -191,7 +191,7 @@ def make_decision(composite: float, cos_eigen: float, threshold: float = 0.60):
     return {
         "is_same_person": bool(is_same),
         "verdict":      "Orang yang Sama" if is_same else "Orang yang Berbeda",
-        "verdict_icon": "YES" if is_same else "NO",
+        "verdict_icon": "✅" if is_same else "❌",
         "level": level, "confidence": confidence, "color": color,
         "threshold_used": threshold,
     }
