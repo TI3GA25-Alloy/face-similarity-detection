@@ -74,13 +74,16 @@ def compute_all_metrics(
         weights[15:] = 0.5
         
     euc_d = float(np.linalg.norm((weights1 * weights) - (weights2 * weights)))
-    euc_sim = 1.0 / (1.0 + euc_d)
+    # Ubah euc_sim agar lebih sensitif terhadap jarak yang kecil sekalipun (memisahkan saudara kandung)
+    euc_sim = np.exp(-0.05 * euc_d)
     
     ssim = ssim_simple(face1_display, face2_display)
     cos_pixel = cosine_similarity(face1_display.flatten(), face2_display.flatten())
 
-    penalty_factor = 0.90 + (0.10 * euc_sim)
-    composite = float(max(0, cos_eigen)) * penalty_factor
+    # Rumus Composite Baru: Lebih galak! 
+    # Jika Euclidean distance besar (euc_sim kecil), nilai total langsung hancur.
+    # Ini penting karena Cosine (sudut) saudara kandung pasti mirip, tapi Jarak Absolut (Euclidean) pasti beda.
+    composite = float(max(0, cos_eigen)) * float(euc_sim)
     return {
         "cosine_similarity_eigenspace" : round(cos_eigen, 4),
         "euclidean_distance_eigenspace": round(euc_d, 4),

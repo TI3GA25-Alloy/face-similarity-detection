@@ -154,14 +154,13 @@ def run_pca_svd(face1: np.ndarray, face2: np.ndarray):
         weights[15:] = 0.5
         
     euc_d = float(np.linalg.norm((w1 * weights) - (w2 * weights)))
-    euc_sim = 1.0 / (1.0 + euc_d)
+    euc_sim = np.exp(-0.05 * euc_d)
     
     ssim = ssim_simple(f1, f2)
     cos_pixel = cosine_sim(f1, f2)
     
-    # Tie-Breaker Penalty: Penalize score slightly if Euclidean distance is large
-    penalty_factor = 0.90 + (0.10 * euc_sim)
-    composite = float(max(0, cos_eigen)) * penalty_factor
+    # Tie-Breaker Penalty Baru: Lebih galak!
+    composite = float(max(0, cos_eigen)) * float(euc_sim)
 
     def sv_info(S):
         total = np.sum(S**2)
