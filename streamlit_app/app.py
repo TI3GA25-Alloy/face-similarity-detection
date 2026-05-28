@@ -159,7 +159,7 @@ p { color: var(--text-secondary) !important; }
 st.markdown("""
 <div class="app-header">
   <div style="position:relative;z-index:1">
-    <div class="app-title">FaceMatch<span style="opacity:0.5">/</span> Edge-PCA & SVD</div>
+    <div class="app-title">FaceMatch<span style="opacity:0.5">/</span>Edge-PCA & SVD</div>
     <div style="color:rgba(199,210,254,0.65);font-size:1.125rem;margin-bottom:1rem;font-weight:500;">
       Deteksi Kemiripan Foto Lama vs Foto Baru menggunakan implementasi Edge-PCA Aljabar Linear + Euclidean Tie-Breaker.
     </div>
