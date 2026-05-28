@@ -479,9 +479,9 @@ if file1 and file2:
 
         face1_proc, info1 = preprocess_face(gray1, detect=detect_face_opt, target_size=target_sz)
 
-        best_cos = -1.0
+        best_score = -1.0
+        best_result = None
         best_metrics = None
-        best_decision = None
         best_face2_proc = None
         best_info2 = None
         best_result = None
@@ -532,8 +532,8 @@ if file1 and file2:
 
                 mets = compute_all_metrics(w1, w2, f1_disp, f2_disp, S_joint, penalty_factor=penalty_factor, **fusion_args)
                 
-                if mets["cosine_similarity_eigenspace"] > best_cos:
-                    best_cos = mets["cosine_similarity_eigenspace"]
+                if mets["composite_score"] > best_score:
+                    best_score = mets["composite_score"]
                     best_metrics = mets
                     best_result = res
                     best_face2_proc = f2_proc

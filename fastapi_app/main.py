@@ -111,7 +111,7 @@ async def analyze(request: Request):
             bbox2 = (0, 0, W2, H2)
 
         # Loop pre-processing and comparison with multiple angles
-        best_cos = -1.0
+        best_score = -1.0
         best_result = None
         best_metrics = None
 
@@ -153,9 +153,9 @@ async def analyze(request: Request):
                     **fusion_args
                 )
 
-                c = mets["cosine_similarity_eigenspace"]
-                if c > best_cos:
-                    best_cos = c
+                c = mets["composite_score"]
+                if c > best_score:
+                    best_score = c
                     best_result = res
                     best_metrics = mets
 
