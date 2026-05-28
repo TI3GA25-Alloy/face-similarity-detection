@@ -53,8 +53,8 @@ def detect_eyes_and_angle(gray_crop: np.ndarray) -> Tuple[float, bool]:
 def crop_face(gray_image: np.ndarray, bbox: Tuple[int, int, int, int], padding: float = -0.08) -> np.ndarray:
     x, y, w, h = bbox
     H, W = gray_image.shape
-    # padding negatif berarti kita MEMOTONG ke dalam (mengecilkan kotak)
-    # Ini disebut "Inner-Face Cropping" untuk membuang background dan rambut
+    # padding negatif itu maksudnya kita memotong ke dalam (inner crop)
+    # Ini disebut "Inner-Face Cropping" untuk membuang background dan rambut, jadi yang nampak hanyalah alis mata, mata, hidung, dan mulut
     x1 = max(0, x - int(w * padding))
     y1 = max(0, y - int(h * padding))
     x2 = min(W, x + w + int(w * padding))
