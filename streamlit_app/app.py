@@ -218,11 +218,11 @@ LANG_DICT = {
         "upload_old": "Upload Old Photo",
         "upload_new": "Upload New Photo",
         "btn_analyze": "Analyze Similarity",
-        "sec_01": "Section 01: Pixel Matrix Representation",
-        "sec_02": "Section 02: PCA & Eigenspace",
-        "sec_03": "Section 03: SVD Reconstruction",
-        "sec_04": "Section 04: Vector Projection",
-        "sec_05": "Section 05: Primary Similarity Results",
+        "sec_01": "Section 01: Primary Similarity Results",
+        "sec_02": "Section 02: Pixel Matrix Representation",
+        "sec_03": "Section 03: PCA & Eigenspace",
+        "sec_04": "Section 04: SVD Reconstruction",
+        "sec_05": "Section 05: Vector Projection",
         "sec_06": "Section 06: Advanced Analysis",
         "sec_07": "Section 07: Dynamic Report",
     },
@@ -239,11 +239,11 @@ LANG_DICT = {
         "upload_old": "Unggah Foto Lama",
         "upload_new": "Unggah Foto Baru",
         "btn_analyze": "Analisis Kemiripan",
-        "sec_01": "Bagian 01: Representasi Matriks Piksel",
-        "sec_02": "Bagian 02: PCA & Eigenspace",
-        "sec_03": "Bagian 03: SVD Rekonstruksi",
-        "sec_04": "Bagian 04: Proyeksi Vektor",
-        "sec_05": "Bagian 05: Hasil Similarity Utama",
+        "sec_01": "Bagian 01: Hasil Similarity Utama",
+        "sec_02": "Bagian 02: Representasi Matriks Piksel",
+        "sec_03": "Bagian 03: PCA & Eigenspace",
+        "sec_04": "Bagian 04: SVD Rekonstruksi",
+        "sec_05": "Bagian 05: Proyeksi Vektor",
         "sec_06": "Bagian 06: Analisis Lanjutan",
         "sec_07": "Bagian 07: Laporan Dinamis",
     }
@@ -546,7 +546,17 @@ if file1 and file2:
         w2 = result["weights_face2"]
         U1, S1, Vt1 = result["svd_face1"]["U"], result["svd_face1"]["S"], result["svd_face1"]["Vt"]
         U2, S2, Vt2 = result["svd_face2"]["U"], result["svd_face2"]["S"], result["svd_face2"]["Vt"]
+    
+    
+    st.markdown(f'<div class="section-title">🎯 {T.get("sec_01", "Section 01: Primary Similarity Results")}</div>', unsafe_allow_html=True)
 
+    score    = decision["score"]
+    is_same  = decision["is_same_person"]
+    s_color  = "#10b981" if is_same else "#ef4444"
+    r_class  = "result-same" if is_same else "result-diff"
+    verdict_display = decision.get("verdict_display", decision["verdict"])
+
+    
     st.markdown(f'<div class="section-title">🛠️ {T.get("sec_prep", "Preprocessing Pipeline")}</div>', unsafe_allow_html=True)
     
     def render_preprocessing_steps(info_dict, label):
@@ -571,7 +581,7 @@ if file1 and file2:
     render_preprocessing_steps(info2, "Pipeline Foto Baru")
 
     import pandas as pd
-    st.markdown(f'<div class="section-title">🔢 {T.get("sec_01", "Section 01: Pixel Matrix Representation")}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-title">🔢 {T.get("sec_02", "Section 02: Pixel Matrix Representation")}</div>', unsafe_allow_html=True)
     st.markdown(f"*{T.get('sec_01_desc', 'Menampilkan sub-matriks 16x16 piksel dari pojok kiri atas gambar wajah (setelah pre-processing).')}*")
     
     col_mat1, col_mat2 = st.columns(2)
@@ -589,7 +599,7 @@ if file1 and file2:
         st.dataframe(df2.style.background_gradient(cmap='gray', vmin=0.0, vmax=1.0), height=300)
         st.caption(f"Shape: {face2_display.shape} | Min: {face2_display.min():.2f} | Max: {face2_display.max():.2f} | Mean: {face2_display.mean():.2f} | Std: {face2_display.std():.2f}")
 
-    st.markdown(f'<div class="section-title">📊 {T.get("sec_02", "Section 02: PCA & Eigenspace")}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-title">📊 {T.get("sec_03", "Section 03: PCA & Eigenspace")}</div>', unsafe_allow_html=True)
     if use_dataset and eigenspace is not None:
         st.latex(r"C = \frac{1}{n-1}X^TX \qquad C \cdot v = \lambda \cdot v")
         st.markdown(f"*{T.get('sec_02_desc', 'Proyeksi wajah ke dalam Eigenspace yang dibangun dari dataset.')}*")
@@ -617,7 +627,7 @@ if file1 and file2:
     else:
         st.warning("Eigenspace tidak tersedia. Pastikan Anda memilih Dataset pada Sidebar untuk melihat PCA yang valid.")
 
-    st.markdown(f'<div class="section-title">🖼️ {T.get("sec_03", "Section 03: SVD Reconstruction")}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-title">🖼️ {T.get("sec_04", "Section 04: SVD Reconstruction")}</div>', unsafe_allow_html=True)
     st.markdown(f"*{T.get('sec_03_desc', 'Dekomposisi SVD dan rekonstruksi matriks dengan $k$ komponen.')}*")
     
     k_recon = st.slider("Nilai k untuk Rekonstruksi SVD", 1, min(len(S1), 50), 10)
@@ -653,7 +663,7 @@ if file1 and file2:
     with col_svd2:
         display_svd_recon(face2_display, U2, S2, Vt2, T['upload_new'])
 
-    st.markdown(f'<div class="section-title">📐 {T.get("sec_04", "Section 04: Vector Projection")}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-title">📐 {T.get("sec_05", "Section 05: Vector Projection")}</div>', unsafe_allow_html=True)
     st.markdown(f"*{T.get('sec_04_desc', 'Bobot proyeksi PCA ke dalam Eigenspace.')}*")
     
     proj_df = pd.DataFrame({
@@ -692,14 +702,6 @@ if file1 and file2:
         ax.legend(fontsize=7)
         st.pyplot(fig, use_container_width=False)
         plt.close(fig)
-
-    st.markdown(f'<div class="section-title">🎯 {T.get("sec_05", "Section 05: Primary Similarity Results")}</div>', unsafe_allow_html=True)
-
-    score    = decision["score"]
-    is_same  = decision["is_same_person"]
-    s_color  = "#10b981" if is_same else "#ef4444"
-    r_class  = "result-same" if is_same else "result-diff"
-    verdict_display = decision.get("verdict_display", decision["verdict"])
 
     st.markdown(f"""
     <div class="result-card {r_class}">
