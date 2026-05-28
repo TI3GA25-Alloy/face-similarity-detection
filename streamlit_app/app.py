@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import sys
 import os
+import cv2
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -491,47 +492,54 @@ if file1 and file2:
 
         temp_f2, temp_i2 = preprocess_face(gray2, detect=detect_face_opt, target_size=target_sz, pre_bbox=bbox2)
         
-        angles_to_try = [0.0, -10.0, 10.0, -5.0, 5.0]
-        if temp_i2.get("eye_aligned"):
-            angles_to_try = [temp_i2["angle_used"]]
-
-        for angle in angles_to_try:
-            f2_proc, i2 = preprocess_face(gray2, detect=detect_face_opt, target_size=target_sz, force_angle=angle if not temp_i2.get("eye_aligned") else None, pre_bbox=bbox2)
-            
-            if use_dataset and eigenspace is not None:
-                res = analyze_two_faces_with_dataset(face1_proc, f2_proc, eigenspace)
-                f1_disp = res["face1_resized"]
-                f2_disp = res["face2_resized"]
-                m_label = "Dataset: " + dataset_data.get("source", "")[:40]
-            else:
-                res = analyze_two_faces(face1_proc, f2_proc)
-                f1_disp = face1_proc
-                f2_disp = f2_proc
-                m_label = "Mode: 2 gambar saja (tanpa dataset)"
+        for angle in [0.0, -10.0, 10.0, -5.0, 5.0]:
+            for do_flip in [False, True]:
+                f2_proc_base, i2_base = preprocess_face(gray2, detect=detect_face_opt, target_size=target_sz, pre_bbox=bbox2, force_angle=angle)
                 
-            w1 = res["weights_face1"]
-            w2 = res["weights_face2"]
-            S_joint = res["singular_values_joint"]
+                if do_flip:
+                    f2_proc = cv2.flip(f2_proc_base, 1)
+                    i2 = i2_base.copy()
+                    i2['is_flipped'] = True
+                else:
+                    f2_proc = f2_proc_base
+                    i2 = i2_base.copy()
+                    i2['is_flipped'] = False
+                
+                if use_dataset and eigenspace is not None:
+                    res = analyze_two_faces_with_dataset(face1_proc, f2_proc, eigenspace)
+                    f1_disp = res["face1_resized"]
+                    f2_disp = res["face2_resized"]
+                    m_label = "Dataset: " + dataset_data.get("source", "")[:40]
+                else:
+                    res = analyze_two_faces(face1_proc, f2_proc)
+                    f1_disp = face1_proc
+                    f2_disp = f2_proc
+                    m_label = "Mode: 2 gambar saja (tanpa dataset)"
+                    
+                w1 = res["weights_face1"]
+                w2 = res["weights_face2"]
+                S_joint = res["singular_values_joint"]
 
-            # Prepare fusion arguments if available
-            fusion_args = {}
-            if "weights_face1_lbp" in res:
-                fusion_args["weights1_lbp"] = res["weights_face1_lbp"]
-                fusion_args["weights2_lbp"] = res["weights_face2_lbp"]
-                fusion_args["weights1_hog"] = res["weights_face1_hog"]
-                fusion_args["weights2_hog"] = res["weights_face2_hog"]
-                fusion_args["S_lbp"] = res.get("singular_values_lbp")
-                fusion_args["S_hog"] = res.get("singular_values_hog")
+                # Prepare fusion arguments if available
+                fusion_args = {}
+                if "weights_face1_lbp" in res:
+                    fusion_args["weights1_lbp"] = res["weights_face1_lbp"]
+                    fusion_args["weights2_lbp"] = res["weights_face2_lbp"]
+                    fusion_args["weights1_hog"] = res["weights_face1_hog"]
+                    fusion_args["weights2_hog"] = res["weights_face2_hog"]
+                    fusion_args["S_lbp"] = res.get("singular_values_lbp")
+                    fusion_args["S_hog"] = res.get("singular_values_hog")
 
-            mets = compute_all_metrics(w1, w2, f1_disp, f2_disp, S_joint, penalty_factor=penalty_factor, **fusion_args)
-            
-            if mets["cosine_similarity_eigenspace"] > best_cos:
-                best_cos = mets["cosine_similarity_eigenspace"]
-                best_metrics = mets
-                best_result = res
-                best_face2_proc = f2_proc
-                best_info2 = i2
-                mode_label = f"{m_label} | Rotasi: {i2.get('angle_used', 0.0):.1f}°"
+                mets = compute_all_metrics(w1, w2, f1_disp, f2_disp, S_joint, penalty_factor=penalty_factor, **fusion_args)
+                
+                if mets["cosine_similarity_eigenspace"] > best_cos:
+                    best_cos = mets["cosine_similarity_eigenspace"]
+                    best_metrics = mets
+                    best_result = res
+                    best_face2_proc = f2_proc
+                    best_info2 = i2
+                    flip_text = "Cermin: Ya" if i2.get('is_flipped') else "Cermin: Tidak"
+                    mode_label = f"{m_label} | Rotasi: {i2.get('angle_used', 0.0):.1f}° | {flip_text}"
 
         face2_proc = best_face2_proc
         info2 = best_info2

@@ -4,19 +4,20 @@ from pathlib import Path
 import base64
 import numpy as np
 import cv2
+
+PROJECT_ROOT = Path(__file__).parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
+
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from streamlit_app.core.face_utils import detect_face, crop_face, preprocess_face
+from streamlit_app.core.face_utils import detect_face, preprocess_face
 from streamlit_app.core.pca_svd import load_pretrained_eigenspace
 from streamlit_app.core.feature_extractor import analyze_two_faces_with_dataset, analyze_two_faces
 from streamlit_app.core.similarity import compute_all_metrics
 
 
-PROJECT_ROOT = Path(__file__).parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(PROJECT_ROOT))
-    
 app = FastAPI(title="FaceMatch PCA/SVD API")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
@@ -117,40 +118,46 @@ async def analyze(request: Request):
         face1_proc, _ = preprocess_face(gray1, bbox1, forced_angle=0.0)
 
         for angle in [0.0, -10.0, 10.0, -5.0, 5.0]:
-            f2_proc, _ = preprocess_face(gray2, bbox2, forced_angle=angle)
-            
-            if PRETRAINED is not None:
-                res = analyze_two_faces_with_dataset(face1_proc, f2_proc, PRETRAINED)
-            else:
-                res = analyze_two_faces(face1_proc, f2_proc)
-            
-            w1 = res["weights_face1"]
-            w2 = res["weights_face2"]
-            S_joint = res["singular_values_joint"]
+            for do_flip in [False, True]:
+                f2_proc_base, _ = preprocess_face(gray2, bbox2, forced_angle=angle)
+                
+                if do_flip:
+                    f2_proc = cv2.flip(f2_proc_base, 1)
+                else:
+                    f2_proc = f2_proc_base
+                
+                if PRETRAINED is not None:
+                    res = analyze_two_faces_with_dataset(face1_proc, f2_proc, PRETRAINED)
+                else:
+                    res = analyze_two_faces(face1_proc, f2_proc)
+                
+                w1 = res["weights_face1"]
+                w2 = res["weights_face2"]
+                S_joint = res["singular_values_joint"]
 
-            # Prepare fusion arguments if available
-            fusion_args = {}
-            if "weights_face1_lbp" in res:
-                fusion_args["weights1_lbp"] = res["weights_face1_lbp"]
-                fusion_args["weights2_lbp"] = res["weights_face2_lbp"]
-                fusion_args["weights1_hog"] = res["weights_face1_hog"]
-                fusion_args["weights2_hog"] = res["weights_face2_hog"]
-                fusion_args["S_lbp"] = res.get("singular_values_lbp")
-                fusion_args["S_hog"] = res.get("singular_values_hog")
+                # Prepare fusion arguments if available
+                fusion_args = {}
+                if "weights_face1_lbp" in res:
+                    fusion_args["weights1_lbp"] = res["weights_face1_lbp"]
+                    fusion_args["weights2_lbp"] = res["weights_face2_lbp"]
+                    fusion_args["weights1_hog"] = res["weights_face1_hog"]
+                    fusion_args["weights2_hog"] = res["weights_face2_hog"]
+                    fusion_args["S_lbp"] = res.get("singular_values_lbp")
+                    fusion_args["S_hog"] = res.get("singular_values_hog")
 
-            mets = compute_all_metrics(
-                w1, w2, 
-                res["face1_resized"], res["face2_resized"], 
-                S_joint, 
-                penalty_factor=0.05, 
-                **fusion_args
-            )
+                mets = compute_all_metrics(
+                    w1, w2, 
+                    res["face1_resized"], res["face2_resized"], 
+                    S_joint, 
+                    penalty_factor=0.05, 
+                    **fusion_args
+                )
 
-            c = mets["cosine_similarity_eigenspace"]
-            if c > best_cos:
-                best_cos = c
-                best_result = res
-                best_metrics = mets
+                c = mets["cosine_similarity_eigenspace"]
+                if c > best_cos:
+                    best_cos = c
+                    best_result = res
+                    best_metrics = mets
 
         decision = make_decision(best_metrics["composite_score"], threshold)
 
