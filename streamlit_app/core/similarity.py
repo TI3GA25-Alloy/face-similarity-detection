@@ -64,14 +64,16 @@ def compute_all_metrics(
     
     cos_eigen = float(custom_weighted_cosine_sim(w1s, w2s))
  
-    # PERBAIKAN: Jarak Euclidean HARUS dihitung dari matriks yang sudah di-Scaling (Mahalanobis)!
-    # Kalau pakai raw weights1, angkanya raksasa dan pinaltinya menghancurkan skor.
     w1_clean = w1s[3:] if len(w1s) > 3 else w1s
     w2_clean = w2s[3:] if len(w2s) > 3 else w2s
     euc_d     = float(np.linalg.norm(w1_clean - w2_clean))
-    euc_sim   = float(np.exp(-0.02 * euc_d))
     
-    score_pix = float(max(0, cos_eigen)) * euc_sim
+    # PERBAIKAN: Ubah Pinalti Euclidean menjadi sekadar "Tie-Breaker Pengurang" (Maksimal ngurangi 5% dari skor).
+    # Sebelumnya dia berfungsi sebagai "Multiplier" yang membuat skor 99% hancur jadi 58%.
+    euc_penalty = min(0.05, 0.001 * euc_d)
+    euc_sim     = 1.0 - euc_penalty  # Hanya untuk kompatibilitas dictionary
+    
+    score_pix = max(0.0, float(cos_eigen) - euc_penalty)
 
     ssim      = ssim_simple(face1_display, face2_display)
     cos_pixel = float(cosine_similarity(face1_display.flatten(), face2_display.flatten()))
@@ -99,7 +101,8 @@ def compute_all_metrics(
         wl1_clean = w1_lbp_s[3:] if len(w1_lbp_s) > 3 else w1_lbp_s
         wl2_clean = w2_lbp_s[3:] if len(w2_lbp_s) > 3 else w2_lbp_s
         d_lbp     = float(np.linalg.norm(wl1_clean - wl2_clean))
-        score_lbp = float(max(0, cos_lbp)) * float(np.exp(-0.02 * d_lbp))
+        penalty_lbp = min(0.05, 0.001 * d_lbp)
+        score_lbp = max(0.0, float(cos_lbp) - penalty_lbp)
 
         s_hog = S_hog if S_hog is not None else np.ones_like(weights1_hog)
         w1_hog_s = weights1_hog / (s_hog ** 0.5 + 1e-8)
@@ -109,7 +112,8 @@ def compute_all_metrics(
         wh1_clean = w1_hog_s[3:] if len(w1_hog_s) > 3 else w1_hog_s
         wh2_clean = w2_hog_s[3:] if len(w2_hog_s) > 3 else w2_hog_s
         d_hog     = float(np.linalg.norm(wh1_clean - wh2_clean))
-        score_hog = float(max(0, cos_hog)) * float(np.exp(-0.02 * d_hog))
+        penalty_hog = min(0.05, 0.001 * d_hog)
+        score_hog = max(0.0, float(cos_hog) - penalty_hog)
 
         total_w   = alpha + beta + gamma
         composite = (alpha * score_lbp + beta * score_hog + gamma * score_pix) / total_w
