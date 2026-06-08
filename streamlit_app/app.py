@@ -274,9 +274,9 @@ with st.sidebar:
     target_size_sel = st.selectbox(T['target_size_label'], [64, 128, 256], index=1)
     
     st.sidebar.markdown("### Bobot Fusion (Sensor)")
-    alpha_lbp = st.sidebar.slider("Bobot LBP (Tekstur)", 0.0, 2.0, 1.0, 0.1)
-    beta_hog = st.sidebar.slider("Bobot HOG (Bentuk)", 0.0, 2.0, 1.0, 0.1)
-    gamma_pix = st.sidebar.slider("Bobot Pixel (Intensitas)", 0.0, 2.0, 1.0, 0.1)
+    alpha_lbp = st.sidebar.slider("Bobot LBP (Tekstur)", 0.0, 2.0, 0.0, 0.1, help="Tekstur kulit berubah drastis dari bayi ke dewasa. Set 0 untuk lintas usia.")
+    beta_hog = st.sidebar.slider("Bobot HOG (Bentuk)", 0.0, 2.0, 0.0, 0.1, help="Bentuk rahang berubah dari bayi ke dewasa. Set 0 untuk lintas usia.")
+    gamma_pix = st.sidebar.slider("Bobot Pixel (Intensitas)", 0.0, 2.0, 1.0, 0.1, help="Menangkap struktur tulang statis yang tidak berubah oleh usia.")
     
     detect_face_opt = st.toggle("Auto Deteksi Wajah", value=True)
     show_eigenfaces = st.toggle("Tampilkan Eigenfaces Dataset", value=True)
