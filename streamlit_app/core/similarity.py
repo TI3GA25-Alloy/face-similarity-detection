@@ -62,10 +62,14 @@ def compute_all_metrics(
     w1s = weights1 / (s_j ** 0.5 + 1e-8)
     w2s = weights2 / (s_j ** 0.5 + 1e-8)
     
-    cos_eigen = float(cosine_similarity(w1s, w2s))
+    cos_eigen = float(custom_weighted_cosine_sim(w1s, w2s))
  
-    euc_d     = float(np.linalg.norm(weights1 - weights2))
-    euc_sim   = float(np.exp(-penalty_factor * euc_d))
+    # PERBAIKAN: Jarak Euclidean HARUS dihitung dari matriks yang sudah di-Scaling (Mahalanobis)!
+    # Kalau pakai raw weights1, angkanya raksasa dan pinaltinya menghancurkan skor.
+    w1_clean = w1s[3:] if len(w1s) > 3 else w1s
+    w2_clean = w2s[3:] if len(w2s) > 3 else w2s
+    euc_d     = float(np.linalg.norm(w1_clean - w2_clean))
+    euc_sim   = float(np.exp(-0.02 * euc_d))
     
     score_pix = float(max(0, cos_eigen)) * euc_sim
 
@@ -87,23 +91,25 @@ def compute_all_metrics(
     )
 
     if is_fusion:
-        # Mahalanobis Whitening untuk LBP
         s_lbp = S_lbp if S_lbp is not None else np.ones_like(weights1_lbp)
         w1_lbp_s = weights1_lbp / (s_lbp ** 0.5 + 1e-8)
         w2_lbp_s = weights2_lbp / (s_lbp ** 0.5 + 1e-8)
         
-        cos_lbp   = float(cosine_similarity(w1_lbp_s, w2_lbp_s))
-        d_lbp     = float(np.linalg.norm(weights1_lbp - weights2_lbp))
-        score_lbp = float(max(0, cos_lbp)) * float(np.exp(-penalty_factor * d_lbp))
+        cos_lbp   = float(custom_weighted_cosine_sim(w1_lbp_s, w2_lbp_s))
+        wl1_clean = w1_lbp_s[3:] if len(w1_lbp_s) > 3 else w1_lbp_s
+        wl2_clean = w2_lbp_s[3:] if len(w2_lbp_s) > 3 else w2_lbp_s
+        d_lbp     = float(np.linalg.norm(wl1_clean - wl2_clean))
+        score_lbp = float(max(0, cos_lbp)) * float(np.exp(-0.02 * d_lbp))
 
-        # Mahalanobis Whitening untuk HOG
         s_hog = S_hog if S_hog is not None else np.ones_like(weights1_hog)
         w1_hog_s = weights1_hog / (s_hog ** 0.5 + 1e-8)
         w2_hog_s = weights2_hog / (s_hog ** 0.5 + 1e-8)
         
-        cos_hog   = float(cosine_similarity(w1_hog_s, w2_hog_s))
-        d_hog     = float(np.linalg.norm(weights1_hog - weights2_hog))
-        score_hog = float(max(0, cos_hog)) * float(np.exp(-penalty_factor * d_hog))
+        cos_hog   = float(custom_weighted_cosine_sim(w1_hog_s, w2_hog_s))
+        wh1_clean = w1_hog_s[3:] if len(w1_hog_s) > 3 else w1_hog_s
+        wh2_clean = w2_hog_s[3:] if len(w2_hog_s) > 3 else w2_hog_s
+        d_hog     = float(np.linalg.norm(wh1_clean - wh2_clean))
+        score_hog = float(max(0, cos_hog)) * float(np.exp(-0.02 * d_hog))
 
         total_w   = alpha + beta + gamma
         composite = (alpha * score_lbp + beta * score_hog + gamma * score_pix) / total_w

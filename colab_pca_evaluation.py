@@ -7,6 +7,11 @@ from sklearn.datasets import fetch_olivetti_faces, fetch_lfw_people
 from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_similarity
 import warnings
+import sys
+
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
 warnings.filterwarnings('ignore')
 
 
@@ -192,26 +197,61 @@ print(f"   • Kelompok (aug): {X_kel_aug.shape[0]} foto ({n_anggota} orang × 5
 print(f"   • TOTAL         : {X_train_total.shape[0]} foto × {X_train_total.shape[1]} fitur")
 print(f"   • Orang unik    : {len(np.unique(y_train_total))}")
 
+from skimage.feature import local_binary_pattern, hog
+
+print(f"\n   ⏳ Mengekstrak fitur LBP (Tekstur) dan HOG (Bentuk) untuk {X_train_total.shape[0]} foto...")
+X_train_lbp = []
+X_train_hog = []
+
+for vec in X_train_total:
+    img_2d = vec.reshape(100, 100)
+    img_uint8 = (np.clip(img_2d, 0, 1) * 255).astype(np.uint8)
+    
+    lbp = local_binary_pattern(img_uint8, P=8, R=1, method='uniform')
+    X_train_lbp.append(lbp.flatten().astype(np.float32) / (lbp.max() + 1e-8))
+    
+    h = hog(img_uint8, orientations=8, pixels_per_cell=(8, 8), cells_per_block=(2, 2), block_norm='L2-Hys', visualize=False)
+    X_train_hog.append(h.astype(np.float32))
+
+X_train_lbp = np.array(X_train_lbp)
+X_train_hog = np.array(X_train_hog)
+
+print("   ⏳ Melatih 3 Model PCA secara bersamaan (Pixel, LBP, HOG)...")
 pca = PCA(n_components=N_KOMPONEN_PCA, whiten=True, random_state=42)
 pca.fit(X_train_total)
 
+pca_lbp = PCA(n_components=N_KOMPONEN_PCA, whiten=True, random_state=42)
+pca_lbp.fit(X_train_lbp)
+
+pca_hog = PCA(n_components=N_KOMPONEN_PCA, whiten=True, random_state=42)
+pca_hog.fit(X_train_hog)
+
 variance_total = np.sum(pca.explained_variance_ratio_) * 100
-print(f"\n   PCA selesai! Variance explained: {variance_total:.1f}%")
+print(f"\n   ✅ PCA selesai! Variance explained (Pixel): {variance_total:.1f}%")
 print(f"   Dimensi: 10.000 → {N_KOMPONEN_PCA}")
 
-print(f"    Menyimpan model otak (pretrained_eigenspace.npz)...")
+print(f"    Menyimpan model otak (pretrained_eigenspace.npz) DENGAN LBP & HOG...")
 np.savez_compressed(
     'pretrained_eigenspace.npz',
     mean_face=pca.mean_,
     eigenfaces=pca.components_,
     singular_values=pca.singular_values_,
     explained_variance_pct=pca.explained_variance_ratio_ * 100,
+    
+    mean_lbp=pca_lbp.mean_,
+    eigenfaces_lbp=pca_lbp.components_,
+    singular_values_lbp=pca_lbp.singular_values_,
+    
+    mean_hog=pca_hog.mean_,
+    eigenfaces_hog=pca_hog.components_,
+    singular_values_hog=pca_hog.singular_values_,
+    
     n_samples=np.array([X_train_total.shape[0]]),
     k_components=np.array([pca.n_components_]),
     image_shape=np.array([100, 100]),
-    feature_mode='pixel'
+    feature_mode='fusion'
 )
-print(f"    Model otak berhasil disimpan! Bisa didownload untuk Backend.")
+print(f"    ✅ Model otak FUSION berhasil disimpan! Bisa didownload untuk Backend.")
 
 X_train_pca       = pca.transform(X_train_total)
 X_test_sama_pca   = pca.transform(X_test_sama)
