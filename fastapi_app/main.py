@@ -182,7 +182,7 @@ async def analyze(request: Request):
             "preprocessing": {
                 "face1_detected": bool(bbox1),
                 "face2_detected": bool(bbox2),
-                "image_size": f"128x128",
+                "image_size": f"{PRETRAINED['target_size'][0]}x{PRETRAINED['target_size'][1]}" if PRETRAINED else "128x128",
             },
         })
 
