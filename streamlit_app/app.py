@@ -1,27 +1,33 @@
-import streamlit as st
-import numpy as np
 import matplotlib
+import numpy as np
+import streamlit as st
+
 matplotlib.use("Agg")
+import os
+import sys
+
+import cv2
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
-import sys
-import os
-import cv2
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.pca_svd import (
-    load_olivetti_dataset,
-    load_lfw_dataset,
-    load_custom_selfie_dataset,
-    load_pretrained_eigenspace,
-    build_eigenspace_from_dataset,
-    analyze_two_faces_with_dataset,
-    analyze_two_faces,
-)
 from core.face_utils import (
-    load_image_from_pil, preprocess_face, detect_face,
+    detect_face,
+    load_image_from_pil,
+    preprocess_face,
 )
+
+from core.pca_svd import (
+    analyze_two_faces,
+    analyze_two_faces_with_dataset,
+    build_eigenspace_from_dataset,
+    load_custom_selfie_dataset,
+    load_lfw_dataset,
+    load_olivetti_dataset,
+    load_pretrained_eigenspace,
+)
+
 from core.similarity import compute_all_metrics, make_decision
 from PIL import Image
 
@@ -32,7 +38,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.markdown("""
+st.markdown(
+    """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
@@ -154,9 +161,12 @@ p { color: var(--text-secondary) !important; }
 ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #374151; }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
-st.markdown("""
+st.markdown(
+    """
 <div class="app-header">
   <div style="position:relative;z-index:1">
     <div class="app-title">FaceMatch<span style="opacity:0.5">/</span>Edge-PCA & SVD</div>
@@ -172,29 +182,44 @@ st.markdown("""
     </div>
   </div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
+
 
 def make_dark_plot():
-    plt.rcParams.update({
-        "figure.facecolor": "#111827", "axes.facecolor": "#1a2235",
-        "axes.edgecolor": "#2d3748", "axes.labelcolor": "#94a3b8",
-        "xtick.color": "#94a3b8", "ytick.color": "#94a3b8",
-        "text.color": "#f1f5f9", "grid.color": "#1e293b", "grid.alpha": 0.5,
-    })
+    plt.rcParams.update(
+        {
+            "figure.facecolor": "#111827",
+            "axes.facecolor": "#1a2235",
+            "axes.edgecolor": "#2d3748",
+            "axes.labelcolor": "#94a3b8",
+            "xtick.color": "#94a3b8",
+            "ytick.color": "#94a3b8",
+            "text.color": "#f1f5f9",
+            "grid.color": "#1e293b",
+            "grid.alpha": 0.5,
+        }
+    )
 
 
 def score_color(s):
-    if s >= 0.85: return "#10b981"
-    elif s >= 0.70: return "#22c55e"
-    elif s >= 0.55: return "#f59e0b"
-    elif s >= 0.40: return "#f97316"
+    if s >= 0.85:
+        return "#10b981"
+    elif s >= 0.70:
+        return "#22c55e"
+    elif s >= 0.55:
+        return "#f59e0b"
+    elif s >= 0.40:
+        return "#f97316"
     return "#ef4444"
 
 
 def render_progress(score, label, color=None):
     c = color or score_color(score)
     pct = max(0.0, score) * 100
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="progress-container">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:0.78rem">
         <span style="color:#94a3b8">{label}</span>
@@ -203,7 +228,10 @@ def render_progress(score, label, color=None):
       <div class="progress-bar-bg">
         <div class="progress-bar-fill" style="width:{pct}%;background:linear-gradient(90deg,{c}88,{c})"></div>
       </div>
-    </div>""", unsafe_allow_html=True)
+    </div>""",
+        unsafe_allow_html=True,
+    )
+
 
 LANG_DICT = {
     "EN": {
@@ -247,7 +275,7 @@ LANG_DICT = {
         "sec_05": "Bagian 05: Proyeksi Vektor",
         "sec_06": "Bagian 06: Analisis Lanjutan",
         "sec_07": "Bagian 07: Laporan Dinamis",
-    }
+    },
 }
 
 with st.sidebar:
@@ -257,28 +285,72 @@ with st.sidebar:
     st.markdown(f"## {T['sidebar_dataset']}")
 
     dataset_choice = st.radio(
-        T['sidebar_dataset_choice'],
-        ["Dataset Lokal (Selfie & ID)", "Olivetti Faces (Direkomendasikan)", "LFW (Labeled Faces in the Wild)", "Tanpa Dataset (2 gambar saja)"],
+        T["sidebar_dataset_choice"],
+        [
+            "Dataset Lokal (Selfie & ID)",
+            "Olivetti Faces (Direkomendasikan)",
+            "LFW (Labeled Faces in the Wild)",
+            "Tanpa Dataset (2 gambar saja)",
+        ],
         index=0,
-        help="Dataset digunakan untuk membangun eigenspace yang lebih kaya"
+        help="Dataset digunakan untuk membangun eigenspace yang lebih kaya",
     )
 
-    n_components = st.slider("Jumlah Eigenfaces (k) / PCA Components", 5, 100, 50, 5,
-        help="Makin banyak = makin akurat, tapi lebih lambat")
+    n_components = st.slider(
+        "Jumlah Eigenfaces (k) / PCA Components",
+        5,
+        100,
+        50,
+        5,
+        help="Makin banyak = makin akurat, tapi lebih lambat",
+    )
 
     st.divider()
     st.markdown(f"## {T['sidebar_params']}")
 
-    threshold = st.slider(T['threshold_label'], 0.40, 0.95, 0.68, 0.01)
-    penalty_factor = st.slider(T['penalty_label'], 0.01, 0.20, 0.05, 0.01)
-    target_size_sel = st.selectbox(T['target_size_label'], [64, 128, 256], index=1)
-    
+    threshold = st.slider(
+        T["threshold_label"],
+        0.20,
+        0.95,
+        0.45,
+        0.01,
+        help="Standar ML: 0.70 untuk Same-Age, 0.40 - 0.45 untuk Cross-Age Verification.",
+    )
+    penalty_factor = st.slider(T["penalty_label"], 0.01, 0.20, 0.05, 0.01)
+    target_size_sel = 100
+
     st.sidebar.markdown("### Bobot Fusion (Sensor)")
-    alpha_lbp = st.sidebar.slider("Bobot LBP (Tekstur)", 0.0, 2.0, 0.0, 0.1, help="Tekstur kulit berubah drastis dari bayi ke dewasa. Set 0 untuk lintas usia.")
-    beta_hog = st.sidebar.slider("Bobot HOG (Bentuk)", 0.0, 2.0, 0.0, 0.1, help="Bentuk rahang berubah dari bayi ke dewasa. Set 0 untuk lintas usia.")
-    gamma_pix = st.sidebar.slider("Bobot Pixel (Intensitas)", 0.0, 2.0, 1.0, 0.1, help="Menangkap struktur tulang statis yang tidak berubah oleh usia.")
-    
+    alpha_lbp = st.sidebar.slider(
+        "Bobot LBP (Tekstur)",
+        0.0,
+        2.0,
+        0.3,
+        0.1,
+        help="Tekstur wajah. Tahan terhadap variasi pencahayaan dan penuaan lokal.",
+    )
+    beta_hog = st.sidebar.slider(
+        "Bobot HOG (Bentuk)",
+        0.0,
+        2.0,
+        0.4,
+        0.1,
+        help="Struktur tulang/geometri wajah. Sensor paling tangguh untuk Lintas Usia.",
+    )
+    gamma_pix = st.sidebar.slider(
+        "Bobot Pixel (Intensitas)",
+        0.0,
+        2.0,
+        0.3,
+        0.1,
+        help="Sangat akurat untuk usia sebaya, namun rentan pada variasi pose dan usia.",
+    )
+
     detect_face_opt = st.toggle("Auto Deteksi Wajah", value=True)
+    apply_aging_vector = st.toggle(
+        "🔬 Injeksi Vektor Penuaan (Foto Lama)", 
+        value=False,
+        help="Gunakan Aljabar Linear untuk menyuntikkan Vektor Penuaan (ΔW) ke Eigenspace foto masa kecil agar bentuk geometrisnya mendekati struktur wajah dewasa."
+    )
     show_eigenfaces = st.toggle("Tampilkan Eigenfaces Dataset", value=True)
     show_math = st.toggle("Penjelasan Matematis", value=True)
     show_svd = st.toggle("Grafik Singular Values", value=True)
@@ -309,10 +381,13 @@ w = eigenfaces @ (face - mean)
 """)
     st.caption("🎓 Aljabar Linear — Semester 2")
 
+
 @st.cache_resource(show_spinner=False)
 def get_eigenspace_olivetti(k):
     data = load_olivetti_dataset()
-    eigenspace = build_eigenspace_from_dataset(data["images"], n_components=k, target_size=(64, 64))
+    eigenspace = build_eigenspace_from_dataset(
+        data["images"], n_components=k, target_size=(64, 64)
+    )
     return data, eigenspace
 
 
@@ -321,36 +396,47 @@ def get_eigenspace_lfw(k):
     data = load_lfw_dataset(min_faces=20, resize=0.4)
     if data is None:
         return None, None
-    eigenspace = build_eigenspace_from_dataset(data["images"], n_components=k,
-    target_size=data["image_shape"])
+    eigenspace = build_eigenspace_from_dataset(
+        data["images"], n_components=k, target_size=data["image_shape"]
+    )
     return data, eigenspace
+
 
 @st.cache_resource(show_spinner=False)
 def get_eigenspace_custom(k):
     # Coba muat model pre-trained (Colab)
-    model_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pretrained_eigenspace.npz")
+    model_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "pretrained_eigenspace.npz",
+    )
     eigenspace = load_pretrained_eigenspace(model_path)
-    
+
     if eigenspace is not None:
         data = {
             "source": eigenspace["source"],
             "description": eigenspace["description"],
             "n_samples": eigenspace["n_samples"],
             "n_people": "?",
-            "image_shape": eigenspace["image_shape"]
+            "image_shape": eigenspace["image_shape"],
         }
         return data, eigenspace
 
-    base_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Selfie & id data - public sample")
+    base_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "Selfie & id data - public sample",
+    )
     data = load_custom_selfie_dataset(base_path, target_size=(128, 128))
     if data is None:
         return None, None
-    eigenspace = build_eigenspace_from_dataset(data["images"], n_components=k, target_size=(128, 128))
+    eigenspace = build_eigenspace_from_dataset(
+        data["images"], n_components=k, target_size=(128, 128)
+    )
     return data, eigenspace
+
 
 use_dataset = "Tanpa Dataset" not in dataset_choice
 dataset_data = None
-eigenspace   = None
+eigenspace = None
 
 if use_dataset:
     with st.spinner("Memuat dataset & membangun eigenspace..."):
@@ -375,14 +461,17 @@ if use_dataset and dataset_data and eigenspace:
     n_people = dataset_data.get("n_people", 0)
     img_shape = dataset_data.get("image_shape", (64, 64))
 
-    st.markdown('<div class="section-title">📦 Dataset Eigenspace</div>', unsafe_allow_html=True)
-    st.markdown(f"""
+    st.markdown(
+        '<div class="section-title">📦 Dataset Eigenspace</div>', unsafe_allow_html=True
+    )
+    st.markdown(
+        f"""
     <div class="dataset-card">
       <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem">
         <span style="font-size:1.5rem">✅</span>
         <div>
-          <div style="font-weight:700;color:#f1f5f9">{dataset_data.get("source","Dataset")}</div>
-          <div style="font-size:0.8rem;color:#64748b">{dataset_data.get("description","")[:120]}...</div>
+          <div style="font-weight:700;color:#f1f5f9">{dataset_data.get("source", "Dataset")}</div>
+          <div style="font-size:0.8rem;color:#64748b">{dataset_data.get("description", "")[:120]}...</div>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.75rem">
@@ -403,43 +492,53 @@ if use_dataset and dataset_data and eigenspace:
           <div class="dataset-stat-lbl">Eigenfaces (k)</div>
         </div>
         <div class="dataset-stat">
-          <div class="dataset-stat-num" style="color:#06b6d4">{total_var*100:.1f}%</div>
+          <div class="dataset-stat-num" style="color:#06b6d4">{total_var * 100:.1f}%</div>
           <div class="dataset-stat-lbl">Variance Captured</div>
         </div>
       </div>
       <div style="margin-top:0.75rem;font-size:0.78rem;color:#64748b">
         Untuk menangkap 95% variance dibutuhkan <strong style="color:#a78bfa">{k95} eigenfaces</strong>
-        dari {img_shape[0]*img_shape[1]:,} dimensi asli
-        &#8594; reduksi dimensi <strong style="color:#6ee7b7">{(img_shape[0]*img_shape[1]//max(k95,1)) if isinstance(k95, int) else '?'}x lebih kecil</strong>
+        dari {img_shape[0] * img_shape[1]:,} dimensi asli
+        &#8594; reduksi dimensi <strong style="color:#6ee7b7">{(img_shape[0] * img_shape[1] // max(k95, 1)) if isinstance(k95, int) else "?"}x lebih kecil</strong>
       </div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     if show_eigenfaces:
-        st.markdown('<div class="section-title">👁️ Eigenfaces dari Dataset</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-title">👁️ Eigenfaces dari Dataset</div>',
+            unsafe_allow_html=True,
+        )
 
         make_dark_plot()
         n_show = min(15, eigenspace["n_components"])
         img_h, img_w = dataset_data.get("image_shape", (64, 64))
         custom_cmap = LinearSegmentedColormap.from_list(
-            "eigen", ["#0a0e1a", "#3b82f6", "#8b5cf6", "#e2e8f0"])
+            "eigen", ["#0a0e1a", "#3b82f6", "#8b5cf6", "#e2e8f0"]
+        )
 
         fig, axes = plt.subplots(2, n_show // 2 + 1, figsize=(16, 5))
         axes = axes.flatten()
 
         mean_img = eigenspace["mean_face"].reshape(img_h, img_w)
-        mean_disp = (mean_img - mean_img.min()) / (mean_img.max() - mean_img.min() + 1e-8)
+        mean_disp = (mean_img - mean_img.min()) / (
+            mean_img.max() - mean_img.min() + 1e-8
+        )
         axes[0].imshow(mean_disp, cmap="gray")
         axes[0].set_title("Mean Face", fontsize=8, color="#f59e0b", pad=4)
         axes[0].axis("off")
 
         evr = eigenspace["explained_variance_ratio"]
         for i in range(1, min(n_show, len(axes))):
-            ef = eigenspace["eigenfaces"][i-1].reshape(img_h, img_w)
+            ef = eigenspace["eigenfaces"][i - 1].reshape(img_h, img_w)
             ef_disp = (ef - ef.min()) / (ef.max() - ef.min() + 1e-8)
             axes[i].imshow(ef_disp, cmap=custom_cmap)
-            pct = evr[i-1] * 100 if i-1 < len(evr) else 0
-            axes[i].set_title(f"EF #{i}\n{pct:.1f}%", fontsize=7, color="#94a3b8", pad=3)
+            pct = evr[i - 1] * 100 if i - 1 < len(evr) else 0
+            axes[i].set_title(
+                f"EF #{i}\n{pct:.1f}%", fontsize=7, color="#94a3b8", pad=3
+            )
             axes[i].axis("off")
 
         for ax in axes[n_show:]:
@@ -448,10 +547,13 @@ if use_dataset and dataset_data and eigenspace:
         plt.suptitle(
             f"Eigenfaces dari {n_train} gambar training — "
             f"setiap eigenface = pola dasar wajah manusia",
-            color="#f1f5f9", fontsize=10, fontweight="bold", y=1.01,
+            color="#f1f5f9",
+            fontsize=10,
+            fontweight="bold",
+            y=1.01,
         )
         plt.tight_layout()
-        st.pyplot(fig, use_container_width=True)
+        st.pyplot(fig, width="stretch")
         plt.close(fig)
 
         st.markdown("""
@@ -460,17 +562,34 @@ if use_dataset and dataset_data and eigenspace:
         > Kombinasi dari semua eigenface merepresentasikan "bahasa" wajah manusia.
         """)
 
-st.markdown(f'<div class="section-title">📸 {T.get("upload_title", "Upload Foto")}</div>', unsafe_allow_html=True)
+st.markdown(
+    f'<div class="section-title">📸 {T.get("upload_title", "Upload Foto")}</div>',
+    unsafe_allow_html=True,
+)
 
 col1, col2 = st.columns(2, gap="large")
 with col1:
-    st.markdown(f'<div style="font-size:0.75rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;margin-bottom:0.5rem">📷 {T["upload_old"]}</div>', unsafe_allow_html=True)
-    file1 = st.file_uploader(T["upload_old"], type=["jpg","jpeg","png","bmp","webp"],
-                              key="photo_old", label_visibility="collapsed")
+    st.markdown(
+        f'<div style="font-size:0.75rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;margin-bottom:0.5rem">📷 {T["upload_old"]}</div>',
+        unsafe_allow_html=True,
+    )
+    file1 = st.file_uploader(
+        T["upload_old"],
+        type=["jpg", "jpeg", "png", "bmp", "webp"],
+        key="photo_old",
+        label_visibility="collapsed",
+    )
 with col2:
-    st.markdown(f'<div style="font-size:0.75rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;margin-bottom:0.5rem">📱 {T["upload_new"]}</div>', unsafe_allow_html=True)
-    file2 = st.file_uploader(T["upload_new"], type=["jpg","jpeg","png","bmp","webp"],
-                              key="photo_new", label_visibility="collapsed")
+    st.markdown(
+        f'<div style="font-size:0.75rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;margin-bottom:0.5rem">📱 {T["upload_new"]}</div>',
+        unsafe_allow_html=True,
+    )
+    file2 = st.file_uploader(
+        T["upload_new"],
+        type=["jpg", "jpeg", "png", "bmp", "webp"],
+        key="photo_new",
+        label_visibility="collapsed",
+    )
 
 if file1 and file2:
     with st.spinner("Memproses gambar & menjalankan PCA/SVD..."):
@@ -482,104 +601,99 @@ if file1 and file2:
 
         target_sz = (target_size_sel, target_size_sel)
 
-        face1_proc, info1 = preprocess_face(gray1, detect=detect_face_opt, target_size=target_sz)
-
-        best_score = -1.0
-        best_result = None
-        best_metrics = None
-        best_face2_proc = None
-        best_info2 = None
-        best_result = None
+        face1_proc, info1 = preprocess_face(
+            gray1, detect=detect_face_opt, target_size=target_sz
+        )
 
         bbox2 = None
         if detect_face_opt:
             bbox2 = detect_face(gray2)
 
-        temp_f2, temp_i2 = preprocess_face(gray2, detect=detect_face_opt, target_size=target_sz, pre_bbox=bbox2)
-        
-        for angle in [0.0, -10.0, 10.0, -5.0, 5.0]:
-            for do_flip in [False, True]:
-                f2_proc_base, i2_base = preprocess_face(gray2, detect=detect_face_opt, target_size=target_sz, pre_bbox=bbox2, force_angle=angle)
-                
-                if do_flip:
-                    f2_proc = cv2.flip(f2_proc_base, 1)
-                    i2 = i2_base.copy()
-                    i2['is_flipped'] = True
-                else:
-                    f2_proc = f2_proc_base
-                    i2 = i2_base.copy()
-                    i2['is_flipped'] = False
-                
-                if use_dataset and eigenspace is not None:
-                    res = analyze_two_faces_with_dataset(face1_proc, f2_proc, eigenspace)
-                    f1_disp = res["face1_resized"]
-                    f2_disp = res["face2_resized"]
-                    m_label = "Dataset: " + dataset_data.get("source", "")[:40]
-                else:
-                    res = analyze_two_faces(face1_proc, f2_proc)
-                    f1_disp = face1_proc
-                    f2_disp = f2_proc
-                    m_label = "Mode: 2 gambar saja (tanpa dataset)"
-                    
-                w1 = res["weights_face1"]
-                w2 = res["weights_face2"]
-                S_joint = res["singular_values_joint"]
+        face2_proc, info2 = preprocess_face(
+            gray2, detect=detect_face_opt, target_size=target_sz, pre_bbox=bbox2, force_angle=0.0
+        )
+        info2["is_flipped"] = False
 
-                # Prepare fusion arguments if available
-                fusion_args = {}
-                if "weights_face1_lbp" in res:
-                    fusion_args["weights1_lbp"] = res["weights_face1_lbp"]
-                    fusion_args["weights2_lbp"] = res["weights_face2_lbp"]
-                    fusion_args["weights1_hog"] = res["weights_face1_hog"]
-                    fusion_args["weights2_hog"] = res["weights_face2_hog"]
-                    fusion_args["S_lbp"] = res.get("singular_values_lbp")
-                    fusion_args["S_hog"] = res.get("singular_values_hog")
+        if use_dataset and eigenspace is not None:
+            result = analyze_two_faces_with_dataset(
+                face1_proc, face2_proc, eigenspace, apply_aging=apply_aging_vector
+            )
+            f1_disp = result["face1_resized"]
+            f2_disp = result["face2_resized"]
+            m_label = "Dataset: " + dataset_data.get("source", "")[:40]
+        else:
+            result = analyze_two_faces(face1_proc, face2_proc)
+            f1_disp = face1_proc
+            f2_disp = face2_proc
+            m_label = "Mode: 2 gambar saja (tanpa dataset)"
 
-                mets = compute_all_metrics(w1, w2, f1_disp, f2_disp, S_joint, penalty_factor=penalty_factor, alpha=alpha_lbp, beta=beta_hog, gamma=gamma_pix, **fusion_args)
-                
-                if mets["composite_score"] > best_score:
-                    best_score = mets["composite_score"]
-                    best_metrics = mets
-                    best_result = res
-                    best_face2_proc = f2_proc
-                    best_info2 = i2
-                    flip_text = "Cermin: Ya" if i2.get('is_flipped') else "Cermin: Tidak"
-                    mode_label = f"{m_label} | Rotasi: {i2.get('angle_used', 0.0):.1f}° | {flip_text}"
-
-        face2_proc = best_face2_proc
-        info2 = best_info2
-        result = best_result
-        metrics = best_metrics
-        decision = make_decision(metrics, threshold=threshold)
-        
-        face1_display = result["face1_resized"] if use_dataset else face1_proc
-        face2_display = result["face2_resized"] if use_dataset else face2_proc
-        
         w1 = result["weights_face1"]
         w2 = result["weights_face2"]
-        U1, S1, Vt1 = result["svd_face1"]["U"], result["svd_face1"]["S"], result["svd_face1"]["Vt"]
-        U2, S2, Vt2 = result["svd_face2"]["U"], result["svd_face2"]["S"], result["svd_face2"]["Vt"]
-    
-    
-    st.markdown(f'<div class="section-title">🎯 {T.get("sec_01", "Section 01: Primary Similarity Results")}</div>', unsafe_allow_html=True)
+        S_joint = result["singular_values_joint"]
 
-    score    = decision["score"]
-    is_same  = decision["is_same_person"]
-    s_color  = "#10b981" if is_same else "#ef4444"
-    r_class  = "result-same" if is_same else "result-diff"
+        fusion_args = {}
+        if "weights_face1_lbp" in result:
+            fusion_args["weights1_lbp"] = result["weights_face1_lbp"]
+            fusion_args["weights2_lbp"] = result["weights_face2_lbp"]
+            fusion_args["weights1_hog"] = result["weights_face1_hog"]
+            fusion_args["weights2_hog"] = result["weights_face2_hog"]
+            fusion_args["S_lbp"] = result.get("singular_values_lbp")
+            fusion_args["S_hog"] = result.get("singular_values_hog")
+
+        metrics = compute_all_metrics(
+            w1,
+            w2,
+            f1_disp,
+            f2_disp,
+            S_joint,
+            penalty_factor=penalty_factor,
+            alpha=alpha_lbp,
+            beta=beta_hog,
+            gamma=gamma_pix,
+            **fusion_args,
+        )
+
+        mode_label = f"{m_label} | Rotasi: 0.0° | Cermin: Tidak"
+        decision = make_decision(metrics, threshold=threshold)
+
+        face1_display = result["face1_resized"] if use_dataset else face1_proc
+        face2_display = result["face2_resized"] if use_dataset else face2_proc
+
+        w1 = result["weights_face1"]
+        w2 = result["weights_face2"]
+        U1, S1, Vt1 = (
+            result["svd_face1"]["U"],
+            result["svd_face1"]["S"],
+            result["svd_face1"]["Vt"],
+        )
+        U2, S2, Vt2 = (
+            result["svd_face2"]["U"],
+            result["svd_face2"]["S"],
+            result["svd_face2"]["Vt"],
+        )
+
+    st.markdown(
+        f'<div class="section-title">🎯 {T.get("sec_01", "Section 01: Primary Similarity Results")}</div>',
+        unsafe_allow_html=True,
+    )
+
+    score = decision["score"]
+    is_same = decision["is_same_person"]
+    s_color = "#10b981" if is_same else "#ef4444"
+    r_class = "result-same" if is_same else "result-diff"
     verdict_display = decision.get("verdict_display", decision["verdict"])
-    
-    
-    st.markdown(f"""
+
+    st.markdown(
+        f"""
     <div class="result-card {r_class}">
-      <div style="font-size:3rem;margin-bottom:0.5rem">{'&#x2705;' if is_same else '&#x274c;'}</div>
+      <div style="font-size:3rem;margin-bottom:0.5rem">{"&#x2705;" if is_same else "&#x274c;"}</div>
       <div style="font-size:1.5rem;font-weight:800;color:{s_color};margin-bottom:0.3rem">{verdict_display}</div>
       <div style="font-size:3.5rem;font-weight:900;color:{s_color};line-height:1;margin:0.5rem 0">{score:.1%}</div>
       <div style="color:#64748b;font-size:0.85rem;margin-bottom:0.75rem">Composite Score (Edge-PCA + Pinalti Euclidean)</div>
       <div style="display:flex;justify-content:center;gap:0.75rem;flex-wrap:wrap">
         <span style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);
                      border-radius:50px;padding:0.3rem 0.85rem;font-size:0.75rem;color:{s_color}">
-          {decision['level']} &middot; Kepercayaan: {decision['confidence']}
+          {decision["level"]} &middot; Kepercayaan: {decision["confidence"]}
         </span>
         <span style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);
                      border-radius:50px;padding:0.3rem 0.85rem;font-size:0.75rem;color:#94a3b8">
@@ -591,196 +705,314 @@ if file1 and file2:
         </span>
       </div>
     </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown(f'<div class="section-title">🛠️ {T.get("sec_prep", "Preprocessing Pipeline")}</div>', unsafe_allow_html=True)
-    
+    """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        f'<div class="section-title">🛠️ {T.get("sec_prep", "Preprocessing Pipeline")}</div>',
+        unsafe_allow_html=True,
+    )
+
     def render_preprocessing_steps(info_dict, label):
-        st.markdown(f"**{label}** (Sudut Rotasi: `{info_dict.get('angle_used', 0.0):.2f}°` | Eye Aligned: `{'Ya' if info_dict.get('eye_aligned') else 'Tidak'}`)")
+        st.markdown(
+            f"**{label}** (Sudut Rotasi: `{info_dict.get('angle_used', 0.0):.2f}°` | Eye Aligned: `{'Ya' if info_dict.get('eye_aligned') else 'Tidak'}`)"
+        )
         steps = info_dict.get("steps", {})
-        
+
         step_names = ["Original", "Crop", "Aligned", "Equalized", "Final"]
         step_keys = ["original_gray", "crop", "aligned", "equalized", "final"]
-        
+
         cols = st.columns(len(step_names))
         for i, (name, key) in enumerate(zip(step_names, step_keys)):
             if key in steps:
                 img = steps[key]
-                disp = (img - img.min()) / (img.max() - img.min() + 1e-8) if img.dtype == np.float64 else img
+                disp = (
+                    (img - img.min()) / (img.max() - img.min() + 1e-8)
+                    if img.dtype == np.float64
+                    else img
+                )
                 with cols[i]:
-                    st.image(disp, caption=f"{i+1}. {name}", use_container_width=True, clamp=True)
+                    st.image(
+                        disp,
+                        caption=f"{i + 1}. {name}",
+                        width="stretch",
+                        clamp=True,
+                    )
                     if i < len(step_names) - 1 and key != "final":
-                        st.markdown("<div style='text-align:center;color:#6366f1'>⬇️</div>", unsafe_allow_html=True)
+                        st.markdown(
+                            "<div style='text-align:center;color:#6366f1'>⬇️</div>",
+                            unsafe_allow_html=True,
+                        )
 
     render_preprocessing_steps(info1, "Pipeline Foto Lama")
     st.divider()
     render_preprocessing_steps(info2, "Pipeline Foto Baru")
 
     import pandas as pd
-    st.markdown(f'<div class="section-title">🔢 {T.get("sec_02", "Section 02: Pixel Matrix Representation")}</div>', unsafe_allow_html=True)
-    st.markdown(f"*{T.get('sec_01_desc', 'Menampilkan sub-matriks 16x16 piksel dari pojok kiri atas gambar wajah (setelah pre-processing).')}*")
-    
+
+    st.markdown(
+        f'<div class="section-title">🔢 {T.get("sec_02", "Section 02: Pixel Matrix Representation")}</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"*{T.get('sec_01_desc', 'Menampilkan sub-matriks 16x16 piksel dari pojok kiri atas gambar wajah (setelah pre-processing).')}*"
+    )
+
     col_mat1, col_mat2 = st.columns(2)
     with col_mat1:
         st.markdown(f"**{T['upload_old']}**")
         sub_mat1 = face1_display[:16, :16]
         df1 = pd.DataFrame(sub_mat1)
-        st.dataframe(df1.style.background_gradient(cmap='gray', vmin=0.0, vmax=1.0), height=300)
-        st.caption(f"Shape: {face1_display.shape} | Min: {face1_display.min():.2f} | Max: {face1_display.max():.2f} | Mean: {face1_display.mean():.2f} | Std: {face1_display.std():.2f}")
+        st.dataframe(
+            df1.style.background_gradient(cmap="gray", vmin=0.0, vmax=1.0), height=300
+        )
+        st.caption(
+            f"Shape: {face1_display.shape} | Min: {face1_display.min():.2f} | Max: {face1_display.max():.2f} | Mean: {face1_display.mean():.2f} | Std: {face1_display.std():.2f}"
+        )
 
     with col_mat2:
         st.markdown(f"**{T['upload_new']}**")
         sub_mat2 = face2_display[:16, :16]
         df2 = pd.DataFrame(sub_mat2)
-        st.dataframe(df2.style.background_gradient(cmap='gray', vmin=0.0, vmax=1.0), height=300)
-        st.caption(f"Shape: {face2_display.shape} | Min: {face2_display.min():.2f} | Max: {face2_display.max():.2f} | Mean: {face2_display.mean():.2f} | Std: {face2_display.std():.2f}")
+        st.dataframe(
+            df2.style.background_gradient(cmap="gray", vmin=0.0, vmax=1.0), height=300
+        )
+        st.caption(
+            f"Shape: {face2_display.shape} | Min: {face2_display.min():.2f} | Max: {face2_display.max():.2f} | Mean: {face2_display.mean():.2f} | Std: {face2_display.std():.2f}"
+        )
 
-    st.markdown(f'<div class="section-title">📊 {T.get("sec_03", "Section 03: PCA & Eigenspace")}</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="section-title">📊 {T.get("sec_03", "Section 03: PCA & Eigenspace")}</div>',
+        unsafe_allow_html=True,
+    )
     if use_dataset and eigenspace is not None:
         st.latex(r"C = \frac{1}{n-1}X^TX \qquad C \cdot v = \lambda \cdot v")
-        st.markdown(f"*{T.get('sec_02_desc', 'Proyeksi wajah ke dalam Eigenspace yang dibangun dari dataset.')}*")
+        st.markdown(
+            f"*{T.get('sec_02_desc', 'Proyeksi wajah ke dalam Eigenspace yang dibangun dari dataset.')}*"
+        )
 
-        ev_df = pd.DataFrame({
-            "Principal Component": [f"PC{i+1}" for i in range(min(10, len(eigenspace["explained_variance_ratio"])))],
-            "Eigenvalue (\u03bb)": [S_joint[i]**2 for i in range(min(10, len(S_joint)))],
-            "Explained Variance (%)": [eigenspace["explained_variance_ratio"][i]*100 for i in range(min(10, len(eigenspace["explained_variance_ratio"])))]
-        })
-        
+        ev_df = pd.DataFrame(
+            {
+                "Principal Component": [
+                    f"PC{i + 1}"
+                    for i in range(min(10, len(eigenspace["explained_variance_ratio"])))
+                ],
+                "Eigenvalue (\u03bb)": [
+                    S_joint[i] ** 2 for i in range(min(10, len(S_joint)))
+                ],
+                "Explained Variance (%)": [
+                    eigenspace["explained_variance_ratio"][i] * 100
+                    for i in range(min(10, len(eigenspace["explained_variance_ratio"])))
+                ],
+            }
+        )
+
         col_pca1, col_pca2 = st.columns([1, 2])
         with col_pca1:
             st.markdown("**Top 10 Eigenvalues (\u03bb)**")
-            st.dataframe(ev_df, use_container_width=True)
+            st.dataframe(ev_df, width="stretch")
         with col_pca2:
             st.markdown("**Scree Plot (Explained Variance)**")
             make_dark_plot()
             fig, ax = plt.subplots(figsize=(8, 3))
-            ax.plot(range(1, len(ev_df)+1), ev_df["Explained Variance (%)"], marker='o', linestyle='-', color='#6366f1')
+            ax.plot(
+                range(1, len(ev_df) + 1),
+                ev_df["Explained Variance (%)"],
+                marker="o",
+                linestyle="-",
+                color="#6366f1",
+            )
             ax.set_xlabel("Principal Component")
             ax.set_ylabel("Variance (%)")
             ax.grid(True, alpha=0.3)
-            st.pyplot(fig, use_container_width=True)
+            st.pyplot(fig, width="stretch")
             plt.close(fig)
     else:
-        st.warning("Eigenspace tidak tersedia. Pastikan Anda memilih Dataset pada Sidebar untuk melihat PCA yang valid.")
+        st.warning(
+            "Eigenspace tidak tersedia. Pastikan Anda memilih Dataset pada Sidebar untuk melihat PCA yang valid."
+        )
 
-    st.markdown(f'<div class="section-title">🖼️ {T.get("sec_04", "Section 04: SVD Reconstruction")}</div>', unsafe_allow_html=True)
-    st.markdown(f"*{T.get('sec_03_desc', 'Dekomposisi SVD dan rekonstruksi matriks dengan $k$ komponen.')}*")
-    
+    st.markdown(
+        f'<div class="section-title">🖼️ {T.get("sec_04", "Section 04: SVD Reconstruction")}</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"*{T.get('sec_03_desc', 'Dekomposisi SVD dan rekonstruksi matriks dengan $k$ komponen.')}*"
+    )
+
     k_recon = st.slider("Nilai k untuk Rekonstruksi SVD", 1, min(len(S1), 50), 10)
-    
+
     def reconstruct_svd(U, S, Vt, k):
         return U[:, :k] @ np.diag(S[:k]) @ Vt[:k, :]
-        
+
     def display_svd_recon(face, U, S, Vt, label):
         recon = reconstruct_svd(U, S, Vt, k_recon)
-        frob_error = np.linalg.norm(face - recon, ord='fro')
-        
+        frob_error = np.linalg.norm(face - recon, ord="fro")
+
         c1, c2 = st.columns(2)
         with c1:
             disp_face = (face - face.min()) / (face.max() - face.min() + 1e-8)
-            st.image(disp_face, caption=f"Asli ({label})", use_container_width=True, clamp=True)
+            st.image(
+                disp_face,
+                caption=f"Asli ({label})",
+                width="stretch",
+                clamp=True,
+            )
         with c2:
             disp_recon = (recon - recon.min()) / (recon.max() - recon.min() + 1e-8)
-            st.image(disp_recon, caption=f"Rekonstruksi k={k_recon}", use_container_width=True, clamp=True)
+            st.image(
+                disp_recon,
+                caption=f"Rekonstruksi k={k_recon}",
+                width="stretch",
+                clamp=True,
+            )
         st.caption(f"Error Frobenius ($|| A - A_k ||_F$): {frob_error:.4f}")
 
         make_dark_plot()
         fig, ax = plt.subplots(figsize=(4, 2))
-        ax.plot(range(1, min(21, len(S)+1)), S[:20], marker='.', color='#10b981')
+        ax.plot(range(1, min(21, len(S) + 1)), S[:20], marker=".", color="#10b981")
         ax.set_title("Top 20 Singular Values", fontsize=8, color="#f1f5f9")
         ax.set_ylabel("\u03c3", fontsize=7)
-        ax.tick_params(axis='both', which='major', labelsize=6)
-        st.pyplot(fig, use_container_width=True)
+        ax.tick_params(axis="both", which="major", labelsize=6)
+        st.pyplot(fig, width="stretch")
         plt.close(fig)
 
     col_svd1, col_svd2 = st.columns(2)
     with col_svd1:
-        display_svd_recon(face1_display, U1, S1, Vt1, T['upload_old'])
+        display_svd_recon(face1_display, U1, S1, Vt1, T["upload_old"])
     with col_svd2:
-        display_svd_recon(face2_display, U2, S2, Vt2, T['upload_new'])
+        display_svd_recon(face2_display, U2, S2, Vt2, T["upload_new"])
 
-    st.markdown(f'<div class="section-title">📐 {T.get("sec_05", "Section 05: Vector Projection")}</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="section-title">📐 {T.get("sec_05", "Section 05: Vector Projection")}</div>',
+        unsafe_allow_html=True,
+    )
     st.markdown(f"*{T.get('sec_04_desc', 'Bobot proyeksi PCA ke dalam Eigenspace.')}*")
-    
-    proj_df = pd.DataFrame({
-        "Component": [f"w_{i+1}" for i in range(min(10, len(w1)))],
-        T['upload_old']: w1[:10],
-        T['upload_new']: w2[:10],
-    })
-    
+
+    proj_df = pd.DataFrame(
+        {
+            "Component": [f"w_{i + 1}" for i in range(min(10, len(w1)))],
+            T["upload_old"]: w1[:10],
+            T["upload_new"]: w2[:10],
+        }
+    )
+
     c_proj1, c_proj2 = st.columns([1, 2])
     with c_proj1:
-        st.dataframe(proj_df, use_container_width=True)
+        st.dataframe(proj_df, width="stretch")
     with c_proj2:
         make_dark_plot()
         fig, ax = plt.subplots(figsize=(6, 3))
         width = 0.35
         x = np.arange(len(proj_df))
-        ax.bar(x - width/2, proj_df[T['upload_old']], width, label=T['upload_old'], color='#6366f1')
-        ax.bar(x + width/2, proj_df[T['upload_new']], width, label=T['upload_new'], color='#f43f5e')
+        ax.bar(
+            x - width / 2,
+            proj_df[T["upload_old"]],
+            width,
+            label=T["upload_old"],
+            color="#6366f1",
+        )
+        ax.bar(
+            x + width / 2,
+            proj_df[T["upload_new"]],
+            width,
+            label=T["upload_new"],
+            color="#f43f5e",
+        )
         ax.set_xticks(x)
-        ax.set_xticklabels(proj_df["Component"], rotation=45, ha='right', fontsize=7)
+        ax.set_xticklabels(proj_df["Component"], rotation=45, ha="right", fontsize=7)
         ax.legend(fontsize=7)
-        st.pyplot(fig, use_container_width=True)
+        st.pyplot(fig, width="stretch")
         plt.close(fig)
 
     if len(w1) >= 2 and len(w2) >= 2:
         make_dark_plot()
         fig, ax = plt.subplots(figsize=(5, 3))
-        ax.scatter(w1[0], w1[1], c='#6366f1', s=100, label=T['upload_old'], zorder=3)
-        ax.scatter(w2[0], w2[1], c='#f43f5e', s=100, label=T['upload_new'], zorder=3)
-        ax.plot([w1[0], w2[0]], [w1[1], w2[1]], 'w--', alpha=0.5, zorder=2)
-        ax.plot([0, w1[0]], [0, w1[1]], color='#6366f1', alpha=0.3, zorder=1)
-        ax.plot([0, w2[0]], [0, w2[1]], color='#f43f5e', alpha=0.3, zorder=1)
-        ax.scatter(0, 0, c='white', marker='x', s=50, label='Origin (Mean Face)')
+        ax.scatter(w1[0], w1[1], c="#6366f1", s=100, label=T["upload_old"], zorder=3)
+        ax.scatter(w2[0], w2[1], c="#f43f5e", s=100, label=T["upload_new"], zorder=3)
+        ax.plot([w1[0], w2[0]], [w1[1], w2[1]], "w--", alpha=0.5, zorder=2)
+        ax.plot([0, w1[0]], [0, w1[1]], color="#6366f1", alpha=0.3, zorder=1)
+        ax.plot([0, w2[0]], [0, w2[1]], color="#f43f5e", alpha=0.3, zorder=1)
+        ax.scatter(0, 0, c="white", marker="x", s=50, label="Origin (Mean Face)")
         ax.set_xlabel("PC1 (w_1)")
         ax.set_ylabel("PC2 (w_2)")
         ax.legend(fontsize=7)
         st.pyplot(fig, use_container_width=False)
         plt.close(fig)
 
-    st.markdown(f'<div class="section-title">🔬 {T.get("sec_06", "Section 06: Advanced Analysis")}</div>', unsafe_allow_html=True)
-    
-    tab_hm, tab_hist, tab_pc, tab_svd = st.tabs(["🔥 Heatmap Selisih", "📊 Histogram Piksel", "📉 Kurva PCA", "📈 Singular Values"])
-    
+    st.markdown(
+        f'<div class="section-title">🔬 {T.get("sec_06", "Section 06: Advanced Analysis")}</div>',
+        unsafe_allow_html=True,
+    )
+
+    tab_hm, tab_hist, tab_pc, tab_svd = st.tabs(
+        [
+            "🔥 Heatmap Selisih",
+            "📊 Histogram Piksel",
+            "📉 Kurva PCA",
+            "📈 Singular Values",
+        ]
+    )
+
     with tab_hm:
         st.markdown("**Absolute Difference Heatmap**")
-        st.markdown("*Menampilkan perbedaan piksel absolut antara Foto Lama dan Foto Baru (setelah alignment).*")
+        st.markdown(
+            "*Menampilkan perbedaan piksel absolut antara Foto Lama dan Foto Baru (setelah alignment).*"
+        )
         diff_img = np.abs(face1_display - face2_display)
-        
+
         make_dark_plot()
         fig_hm, ax_hm = plt.subplots(figsize=(5, 4))
-        cax = ax_hm.imshow(diff_img, cmap='hot')
+        cax = ax_hm.imshow(diff_img, cmap="hot")
         fig_hm.colorbar(cax, ax=ax_hm, fraction=0.046, pad=0.04)
         ax_hm.axis("off")
-        st.pyplot(fig_hm, use_container_width=True)
+        st.pyplot(fig_hm, width="stretch")
         plt.close(fig_hm)
 
     with tab_hist:
         st.markdown("**Distribusi Intensitas Piksel**")
         make_dark_plot()
         fig_h, ax_h = plt.subplots(figsize=(6, 3))
-        ax_h.hist(face1_display.ravel(), bins=50, alpha=0.5, label=T['upload_old'], color='#6366f1')
-        ax_h.hist(face2_display.ravel(), bins=50, alpha=0.5, label=T['upload_new'], color='#f43f5e')
+        ax_h.hist(
+            face1_display.ravel(),
+            bins=50,
+            alpha=0.5,
+            label=T["upload_old"],
+            color="#6366f1",
+        )
+        ax_h.hist(
+            face2_display.ravel(),
+            bins=50,
+            alpha=0.5,
+            label=T["upload_new"],
+            color="#f43f5e",
+        )
         ax_h.set_xlabel("Intensitas Piksel (0 - 1)")
         ax_h.set_ylabel("Frekuensi")
         ax_h.legend(fontsize=8)
-        st.pyplot(fig_h, use_container_width=True)
+        st.pyplot(fig_h, width="stretch")
         plt.close(fig_h)
 
     with tab_pc:
-        st.markdown("**Kurva Perbedaan Bobot (w1 vs w2) untuk 30 Principal Components Pertama**")
+        st.markdown(
+            "**Kurva Perbedaan Bobot (w1 vs w2) untuk 30 Principal Components Pertama**"
+        )
         make_dark_plot()
         fig_pc, ax_pc = plt.subplots(figsize=(8, 3))
         k_plot = min(30, len(w1))
         x_pc = np.arange(1, k_plot + 1)
-        ax_pc.plot(x_pc, w1[:k_plot], marker='o', label=T['upload_old'], color='#6366f1')
-        ax_pc.plot(x_pc, w2[:k_plot], marker='x', label=T['upload_new'], color='#f43f5e')
-        ax_pc.fill_between(x_pc, w1[:k_plot], w2[:k_plot], color='gray', alpha=0.2)
+        ax_pc.plot(
+            x_pc, w1[:k_plot], marker="o", label=T["upload_old"], color="#6366f1"
+        )
+        ax_pc.plot(
+            x_pc, w2[:k_plot], marker="x", label=T["upload_new"], color="#f43f5e"
+        )
+        ax_pc.fill_between(x_pc, w1[:k_plot], w2[:k_plot], color="gray", alpha=0.2)
         ax_pc.set_xlabel("Principal Component")
         ax_pc.set_ylabel("Bobot (w)")
         ax_pc.legend(fontsize=8)
-        st.pyplot(fig_pc, use_container_width=True)
+        st.pyplot(fig_pc, width="stretch")
         plt.close(fig_pc)
 
     with tab_svd:
@@ -789,16 +1021,19 @@ if file1 and file2:
         fig_s, ax_s = plt.subplots(figsize=(8, 3))
         k_s = min(30, len(S1))
         x_s = np.arange(1, k_s + 1)
-        ax_s.plot(x_s, S1[:k_s], marker='o', label=T['upload_old'], color='#6366f1')
-        ax_s.plot(x_s, S2[:k_s], marker='x', label=T['upload_new'], color='#f43f5e')
+        ax_s.plot(x_s, S1[:k_s], marker="o", label=T["upload_old"], color="#6366f1")
+        ax_s.plot(x_s, S2[:k_s], marker="x", label=T["upload_new"], color="#f43f5e")
         ax_s.set_xlabel("Rank")
         ax_s.set_ylabel("Singular Value (\u03c3)")
         ax_s.legend(fontsize=8)
-        st.pyplot(fig_s, use_container_width=True)
+        st.pyplot(fig_s, width="stretch")
         plt.close(fig_s)
 
-    st.markdown(f'<div class="section-title">📄 {T.get("sec_07", "Section 07: Dynamic Report")}</div>', unsafe_allow_html=True)
-    
+    st.markdown(
+        f'<div class="section-title">📄 {T.get("sec_07", "Section 07: Dynamic Report")}</div>',
+        unsafe_allow_html=True,
+    )
+
     report_text = f"""
     # Laporan Analisis FaceMatch (Edge-PCA & SVD)
     
@@ -809,28 +1044,28 @@ if file1 and file2:
     - Jumlah Eigenfaces (k): {len(w1)}
     
     ## Metrik Ekstraksi (Aljabar Linear)
-    - Cosine Similarity (Eigenspace PCA): {metrics.get('cosine_similarity_eigenspace', 0):.4f}
-    - Euclidean Distance (Eigenspace): {metrics.get('euclidean_distance_eigenspace', 0):.4f}
-    - Euclidean Similarity (Norm): {metrics.get('euclidean_similarity_norm', 0):.4f}
+    - Cosine Similarity (Eigenspace PCA): {metrics.get("cosine_similarity_eigenspace", 0):.4f}
+    - Euclidean Distance (Eigenspace): {metrics.get("euclidean_distance_eigenspace", 0):.4f}
+    - Euclidean Similarity (Norm): {metrics.get("euclidean_similarity_norm", 0):.4f}
     """
-    
+
     if "cosine_lbp" in metrics:
         report_text += f"""
     ## Metrik Fusion (LBP + HOG)
-    - Cosine LBP (Tekstur): {metrics.get('cosine_lbp', 0):.4f}  => Score: {metrics.get('score_lbp', 0):.4f}
-    - Cosine HOG (Bentuk): {metrics.get('cosine_hog', 0):.4f}  => Score: {metrics.get('score_hog', 0):.4f}
-    - Score Pixel (Intensitas): {metrics.get('score_pix', 0):.4f}
+    - Cosine LBP (Tekstur): {metrics.get("cosine_lbp", 0):.4f}  => Score: {metrics.get("score_lbp", 0):.4f}
+    - Cosine HOG (Bentuk): {metrics.get("cosine_hog", 0):.4f}  => Score: {metrics.get("score_hog", 0):.4f}
+    - Score Pixel (Intensitas): {metrics.get("score_pix", 0):.4f}
         """
 
     report_text += f"""
     ## Metrik Piksel Dasar
-    - Cosine Similarity (Pixel): {metrics.get('cosine_similarity_pixel', 0):.4f}
-    - SSIM: {metrics.get('ssim_pixel', 0):.4f}
+    - Cosine Similarity (Pixel): {metrics.get("cosine_similarity_pixel", 0):.4f}
+    - SSIM: {metrics.get("ssim_pixel", 0):.4f}
     
     ## Kesimpulan Akhir
-    - Composite Score: {decision['score']:.4f} ({(decision['score']*100):.1f}%)
-    - Hasil Keputusan: {decision['verdict_display']} ({'SAMA' if is_same else 'BERBEDA'})
-    - Tingkat Kepercayaan: {decision['confidence']}
+    - Composite Score: {decision["score"]:.4f} ({(decision["score"] * 100):.1f}%)
+    - Hasil Keputusan: {decision["verdict_display"]} ({"SAMA" if is_same else "BERBEDA"})
+    - Tingkat Kepercayaan: {decision["confidence"]}
     
     **Alasan Matematis:**
     """
@@ -838,17 +1073,18 @@ if file1 and file2:
         report_text += f"\n    - {r}"
 
     st.markdown(f'<div class="math-box">{report_text}</div>', unsafe_allow_html=True)
-    
+
     st.download_button(
         label="📥 Download Report (.txt)",
         data=report_text,
         file_name="facematch_report.txt",
         mime="text/plain",
-        use_container_width=True
+        width="stretch",
     )
 
 else:
-    st.markdown("""
+    st.markdown(
+        """
     <div style="text-align:center;padding:4rem 2rem;background:#111827;border:2px dashed rgba(139,92,246,0.25);border-radius:20px;margin-top:1rem">
       <div style="font-size:3rem;margin-bottom:1rem">🔬</div>
       <h3 style="color:#e2e8f0;margin-bottom:0.5rem">Upload Dua Foto untuk Memulai</h3>
@@ -858,13 +1094,18 @@ else:
         <strong style="color:#6ee7b7">Eigenfaces dari Dataset Olivetti/LFW</strong>.
       </p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
-st.markdown("""
+st.markdown(
+    """
 <div style="text-align:center;margin-top:4rem;padding-top:2rem;border-top:1px solid rgba(255,255,255,0.06)">
   <p style="color:#334155;font-size:0.78rem">
     Tugas Aljabar Linear Semester 2 &middot;
     PCA & SVD (Eigenfaces) &middot; Dataset Olivetti/LFW &middot; NumPy &middot; OpenCV &middot; Streamlit
   </p>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)

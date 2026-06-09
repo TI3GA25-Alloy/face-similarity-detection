@@ -1,9 +1,10 @@
-import sys
-import os
-from pathlib import Path
 import base64
-import numpy as np
+import os
+import sys
+from pathlib import Path
+
 import cv2
+import numpy as np
 
 PROJECT_ROOT = Path(__file__).parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -12,25 +13,30 @@ if str(PROJECT_ROOT) not in sys.path:
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from streamlit_app.core.face_utils import detect_face, preprocess_face
-from streamlit_app.core.pca_svd import load_pretrained_eigenspace
-from streamlit_app.core.pca_svd import analyze_two_faces_with_dataset, analyze_two_faces
-from streamlit_app.core.similarity import compute_all_metrics
 
+from streamlit_app.core.face_utils import detect_face, preprocess_face
+from streamlit_app.core.pca_svd import (
+    analyze_two_faces,
+    analyze_two_faces_with_dataset,
+    load_pretrained_eigenspace,
+)
+from streamlit_app.core.similarity import compute_all_metrics
 
 app = FastAPI(title="FaceMatch PCA/SVD API")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+
 
 def get_npz_path():
     paths = [
         Path(__file__).parent.parent / "pretrained_eigenspace.npz",
         Path(os.getcwd()) / "pretrained_eigenspace.npz",
-        Path("/var/task/pretrained_eigenspace.npz")
+        Path("/var/task/pretrained_eigenspace.npz"),
     ]
     for p in paths:
         if p.exists():
             return p
     return None
+
 
 NPZ_PATH = get_npz_path()
 PRETRAINED = None
@@ -44,6 +50,7 @@ if NPZ_PATH is not None:
 else:
     print("[Error] pretrained_eigenspace.npz not found anywhere!")
 
+
 def decode_b64_image(contents: str) -> np.ndarray:
     if "," in contents:
         contents = contents.split(",")[1]
@@ -54,44 +61,61 @@ def decode_b64_image(contents: str) -> np.ndarray:
         raise ValueError("Gambar tidak valid")
     return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
+
 def make_decision(composite: float, threshold: float = 0.60):
     is_same = composite >= threshold
-    if   composite >= 0.85: level, confidence, color = "Sangat Mirip", "Sangat Tinggi", "#10b981"
-    elif composite >= 0.75: level, confidence, color = "Mirip", "Tinggi", "#22c55e"
-    elif composite >= 0.65: level, confidence, color = "Cukup Mirip", "Sedang", "#f59e0b"
-    elif composite >= 0.50: level, confidence, color = "Kurang Mirip", "Rendah", "#f97316"
-    else:                   level, confidence, color = "Tidak Mirip", "Sangat Rendah", "#ef4444"
+    if composite >= 0.85:
+        level, confidence, color = "Sangat Mirip", "Sangat Tinggi", "#10b981"
+    elif composite >= 0.75:
+        level, confidence, color = "Mirip", "Tinggi", "#22c55e"
+    elif composite >= 0.65:
+        level, confidence, color = "Cukup Mirip", "Sedang", "#f59e0b"
+    elif composite >= 0.50:
+        level, confidence, color = "Kurang Mirip", "Rendah", "#f97316"
+    else:
+        level, confidence, color = "Tidak Mirip", "Sangat Rendah", "#ef4444"
     return {
         "score": composite,
         "is_same_person": bool(is_same),
-        "verdict":      "Orang yang Sama" if is_same else "Orang yang Berbeda",
+        "verdict": "Orang yang Sama" if is_same else "Orang yang Berbeda",
         "verdict_icon": "✅" if is_same else "❌",
-        "level": level, "confidence": confidence, "color": color,
+        "level": level,
+        "confidence": confidence,
+        "color": color,
         "threshold_used": threshold,
     }
 
+
 def sv_info(S):
-    total = np.sum(np.array(S)**2) if len(S) > 0 else 1
+    total = np.sum(np.array(S) ** 2) if len(S) > 0 else 1
     return [
-        {"rank": int(i+1), "value": float(S[i]), "variance_pct": float(S[i]**2 / total * 100)}
+        {
+            "rank": int(i + 1),
+            "value": float(S[i]),
+            "variance_pct": float(S[i] ** 2 / total * 100),
+        }
         for i in range(min(15, len(S)))
     ]
+
 
 # --- ENDPOINTS ---
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     return templates.TemplateResponse(request=request, name="index.html")
 
+
 @app.post("/api/analyze")
 async def analyze(request: Request):
     try:
         if PRETRAINED is None:
-            print("[Warning] pretrained_eigenspace.npz tidak dimuat, akurasi akan buruk!")
-            
-        body      = await request.json()
+            print(
+                "[Warning] pretrained_eigenspace.npz tidak dimuat, akurasi akan buruk!"
+            )
+
+        body = await request.json()
         image1_b64 = body.get("image1")
         image2_b64 = body.get("image2")
-        threshold  = float(body.get("threshold", 0.68))
+        threshold = float(body.get("threshold", 0.68))
 
         if not image1_b64 or not image2_b64:
             return JSONResponse({"error": "Kedua gambar diperlukan"}, status_code=400)
@@ -115,22 +139,28 @@ async def analyze(request: Request):
         best_result = None
         best_metrics = None
 
-        face1_proc, _ = preprocess_face(gray1, detect=True, pre_bbox=bbox1, force_angle=0.0)
+        face1_proc, _ = preprocess_face(
+            gray1, detect=True, pre_bbox=bbox1, force_angle=0.0
+        )
 
         for angle in [0.0, -10.0, 10.0, -5.0, 5.0]:
             for do_flip in [False, True]:
-                f2_proc_base, _ = preprocess_face(gray2, detect=True, pre_bbox=bbox2, force_angle=angle)
-                
+                f2_proc_base, _ = preprocess_face(
+                    gray2, detect=True, pre_bbox=bbox2, force_angle=angle
+                )
+
                 if do_flip:
                     f2_proc = cv2.flip(f2_proc_base, 1)
                 else:
                     f2_proc = f2_proc_base
-                
+
                 if PRETRAINED is not None:
-                    res = analyze_two_faces_with_dataset(face1_proc, f2_proc, PRETRAINED)
+                    res = analyze_two_faces_with_dataset(
+                        face1_proc, f2_proc, PRETRAINED
+                    )
                 else:
                     res = analyze_two_faces(face1_proc, f2_proc)
-                
+
                 w1 = res["weights_face1"]
                 w2 = res["weights_face2"]
                 S_joint = res["singular_values_joint"]
@@ -146,11 +176,13 @@ async def analyze(request: Request):
                     fusion_args["S_hog"] = res.get("singular_values_hog")
 
                 mets = compute_all_metrics(
-                    w1, w2, 
-                    res["face1_resized"], res["face2_resized"], 
-                    S_joint, 
-                    penalty_factor=0.05, 
-                    **fusion_args
+                    w1,
+                    w2,
+                    res["face1_resized"],
+                    res["face2_resized"],
+                    S_joint,
+                    penalty_factor=0.05,
+                    **fusion_args,
                 )
 
                 c = mets["composite_score"]
@@ -165,28 +197,39 @@ async def analyze(request: Request):
         S1 = best_result["svd_face1"]["S"]
         S2 = best_result["svd_face2"]["S"]
         S_joint_array = np.array(best_result["singular_values_joint"])
-        eigenvalues = (S_joint_array ** 2) / 2
+        eigenvalues = (S_joint_array**2) / 2
 
-        return JSONResponse({
-            "success": True,
-            "decision": decision,
-            "metrics": best_metrics,
-            "math_data": {
-                "eigenvalues":           [float(v) for v in eigenvalues],
-                "weights_face1":         [float(v) for v in best_result["weights_face1"][:15]],
-                "weights_face2":         [float(v) for v in best_result["weights_face2"][:15]],
-                "singular_values_face1": sv_info(S1),
-                "singular_values_face2": sv_info(S2),
-                "singular_values_joint": [float(v) for v in best_result["singular_values_joint"][:15]],
-            },
-            "preprocessing": {
-                "face1_detected": bool(bbox1),
-                "face2_detected": bool(bbox2),
-                "image_size": f"{PRETRAINED['target_size'][0]}x{PRETRAINED['target_size'][1]}" if PRETRAINED else "128x128",
-            },
-        })
+        return JSONResponse(
+            {
+                "success": True,
+                "decision": decision,
+                "metrics": best_metrics,
+                "math_data": {
+                    "eigenvalues": [float(v) for v in eigenvalues],
+                    "weights_face1": [
+                        float(v) for v in best_result["weights_face1"][:15]
+                    ],
+                    "weights_face2": [
+                        float(v) for v in best_result["weights_face2"][:15]
+                    ],
+                    "singular_values_face1": sv_info(S1),
+                    "singular_values_face2": sv_info(S2),
+                    "singular_values_joint": [
+                        float(v) for v in best_result["singular_values_joint"][:15]
+                    ],
+                },
+                "preprocessing": {
+                    "face1_detected": bool(bbox1),
+                    "face2_detected": bool(bbox2),
+                    "image_size": f"{PRETRAINED['target_size'][0]}x{PRETRAINED['target_size'][1]}"
+                    if PRETRAINED
+                    else "128x128",
+                },
+            }
+        )
 
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         return JSONResponse({"error": str(e), "success": False}, status_code=500)

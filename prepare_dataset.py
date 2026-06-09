@@ -1,22 +1,21 @@
-
 import os
 import sys
+
 import cv2
 import numpy as np
 
-if sys.platform == 'win32':
-    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-PATH_SAMPEL     = 'dataset_kelompok'         # Folder sumber foto kelompok
-PATH_SELFIE_OLD = 'Selfie & ID Data - Sample'  # Dataset lama (untuk info saja)
-LABEL_MULAI     = 40                         # ID pertama anggota kelompok
-TARGET_SIZE     = (100, 100)                 # Ukuran output gambar
-NAMA_OUTPUT     = 'privasi_kelompok_100x100.npz'
+PATH_SAMPEL = "dataset_kelompok"  # Folder sumber foto kelompok
+PATH_SELFIE_OLD = "Selfie & ID Data - Sample"  # Dataset lama (untuk info saja)
+LABEL_MULAI = 40  # ID pertama anggota kelompok
+TARGET_SIZE = (100, 100)  # Ukuran output gambar
+NAMA_OUTPUT = "privasi_kelompok_100x100.npz"
 
-NAMA_DEWASA = ['dewasa', 'adult', 'baru', 'new', 'dewasa_bawaan']
-NAMA_KECIL  = ['kecil', 'child', 'childhood', 'small', 'lama', 'old']
-VALID_EXT   = ('.jpg', '.jpeg', '.png', '.webp')
-
+NAMA_DEWASA = ["dewasa", "adult", "baru", "new", "dewasa_bawaan"]
+NAMA_KECIL = ["kecil", "child", "childhood", "small", "lama", "old"]
+VALID_EXT = (".jpg", ".jpeg", ".png", ".webp")
 
 
 def cari_file_fleksibel(folder: str, kandidat_nama: list) -> str | None:
@@ -28,14 +27,14 @@ def cari_file_fleksibel(folder: str, kandidat_nama: list) -> str | None:
     for nama in kandidat_nama:
         for f in semua_file:
             nama_tanpa_ext, ext = os.path.splitext(f)
-            if (nama_tanpa_ext.lower() == nama.lower() and
-                    ext.lower() in VALID_EXT):
+            if nama_tanpa_ext.lower() == nama.lower() and ext.lower() in VALID_EXT:
                 return os.path.join(folder, f)
     return None
 
 
 cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 face_cascade = cv2.CascadeClassifier(cascade_path)
+
 
 def detect_and_crop_face(gray_img: np.ndarray) -> np.ndarray:
     """
@@ -44,22 +43,19 @@ def detect_and_crop_face(gray_img: np.ndarray) -> np.ndarray:
     Jika tidak terdeteksi, kembalikan gambar asli sebagai fallback.
     """
     faces = face_cascade.detectMultiScale(
-        gray_img,
-        scaleFactor=1.1,
-        minNeighbors=5,
-        minSize=(30, 30)
+        gray_img, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)
     )
     if len(faces) > 0:
         x, y, w, h = faces[0]
-        
+
         pad_x, pad_y = int(w * 0.1), int(h * 0.1)
         x1 = max(0, x - pad_x)
         y1 = max(0, y - pad_y)
         x2 = min(gray_img.shape[1], x + w + pad_x)
         y2 = min(gray_img.shape[0], y + h + pad_y)
-        
+
         return gray_img[y1:y2, x1:x2]
-    
+
     return gray_img
 
 
@@ -69,14 +65,15 @@ def baca_gambar_grayscale_dan_crop(img_path: str) -> np.ndarray | None:
     if img is None:
         try:
             from PIL import Image
-            pil_img = Image.open(img_path).convert('L')
+
+            pil_img = Image.open(img_path).convert("L")
             img = np.array(pil_img)
         except Exception:
             pass
-            
+
     if img is not None:
         img = detect_and_crop_face(img)
-        
+
     return img
 
 
@@ -87,8 +84,8 @@ def preprocess_dewasa(img: np.ndarray) -> np.ndarray:
     CLAHE diselaraskan dengan face_utils.py di Streamlit agar konsisten.
     """
     clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(16, 16))
-    img   = clahe.apply(img)
-    img   = cv2.resize(img, TARGET_SIZE, interpolation=cv2.INTER_AREA)
+    img = clahe.apply(img)
+    img = cv2.resize(img, TARGET_SIZE, interpolation=cv2.INTER_AREA)
     return (img.astype(np.float32) / 255.0).flatten()
 
 
@@ -100,10 +97,10 @@ def preprocess_kecil(img: np.ndarray) -> np.ndarray:
     CLAHE diselaraskan dengan face_utils.py di Streamlit agar konsisten.
     """
     clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(16, 16))
-    img   = clahe.apply(img)
-    img   = cv2.GaussianBlur(img, (3, 3), sigmaX=0.5)
-    img   = cv2.resize(img, TARGET_SIZE, interpolation=cv2.INTER_AREA)
-    img   = np.power(img.astype(np.float32) / 255.0, 1.0 / 1.2)
+    img = clahe.apply(img)
+    img = cv2.GaussianBlur(img, (3, 3), sigmaX=0.5)
+    img = cv2.resize(img, TARGET_SIZE, interpolation=cv2.INTER_AREA)
+    img = np.power(img.astype(np.float32) / 255.0, 1.0 / 1.2)
     return img.astype(np.float32).flatten()
 
 
@@ -113,11 +110,10 @@ def augmentasi_untuk_uji(vec_dewasa: np.ndarray) -> np.ndarray:
     Teknik: flip horizontal (cermin) + koreksi gamma ringan.
     Ini mensimulasikan 'foto dewasa ke-2' yang tidak tersedia.
     """
-    img     = vec_dewasa.reshape(TARGET_SIZE)
+    img = vec_dewasa.reshape(TARGET_SIZE)
     flipped = np.fliplr(img)
-    aug     = np.power(flipped, 1.0 / 1.1)   # sedikit lebih terang
+    aug = np.power(flipped, 1.0 / 1.1)  # sedikit lebih terang
     return np.clip(aug, 0.0, 1.0).astype(np.float32).flatten()
-
 
 
 def main():
@@ -129,11 +125,13 @@ def main():
         print(f"  ERROR: Folder '{PATH_SAMPEL}' tidak ditemukan!")
         sys.exit(1)
 
-    folder_list = sorted([
-        f for f in os.listdir(PATH_SAMPEL)
-        if os.path.isdir(os.path.join(PATH_SAMPEL, f))
-        and not f.startswith('.')
-    ])
+    folder_list = sorted(
+        [
+            f
+            for f in os.listdir(PATH_SAMPEL)
+            if os.path.isdir(os.path.join(PATH_SAMPEL, f)) and not f.startswith(".")
+        ]
+    )
 
     print(f"  Sumber          : {PATH_SAMPEL}/")
     print(f"  Orang ditemukan : {len(folder_list)}")
@@ -141,32 +139,34 @@ def main():
     print()
 
     wajah_dewasa_latih = []
-    wajah_dewasa_uji   = []
-    wajah_kecil_uji    = []
-    labels             = []
-    nama_anggota       = []   # simpan nama asli untuk KAMUS_NAMA di Colab
+    wajah_dewasa_uji = []
+    wajah_kecil_uji = []
+    labels = []
+    nama_anggota = []  # simpan nama asli untuk KAMUS_NAMA di Colab
 
     print(f"  {'No':<4} {'Nama':<14} {'ID':<6} {'Dewasa':<20} {'Kecil':<20} Status")
     print("  " + "-" * 68)
 
     for idx, nama_folder in enumerate(folder_list):
-        label_id   = LABEL_MULAI + idx
+        label_id = LABEL_MULAI + idx
         path_orang = os.path.join(PATH_SAMPEL, nama_folder)
 
         path_dewasa = cari_file_fleksibel(path_orang, NAMA_DEWASA)
-        path_kecil  = cari_file_fleksibel(path_orang, NAMA_KECIL)
+        path_kecil = cari_file_fleksibel(path_orang, NAMA_KECIL)
 
         file_d = os.path.basename(path_dewasa) if path_dewasa else "-- TIDAK ADA --"
-        file_k = os.path.basename(path_kecil)  if path_kecil  else "-- TIDAK ADA --"
+        file_k = os.path.basename(path_kecil) if path_kecil else "-- TIDAK ADA --"
         status = "OK" if (path_dewasa and path_kecil) else "SKIP"
 
-        print(f"  {idx:<4} {nama_folder:<14} {label_id:<6} {file_d:<20} {file_k:<20} {status}")
+        print(
+            f"  {idx:<4} {nama_folder:<14} {label_id:<6} {file_d:<20} {file_k:<20} {status}"
+        )
 
         if not path_dewasa or not path_kecil:
             continue
 
         img_dewasa = baca_gambar_grayscale_dan_crop(path_dewasa)
-        img_kecil  = baca_gambar_grayscale_dan_crop(path_kecil)
+        img_kecil = baca_gambar_grayscale_dan_crop(path_kecil)
 
         if img_dewasa is None or img_kecil is None:
             print(f"        => GAGAL membaca gambar, lewati.")
@@ -179,8 +179,8 @@ def main():
             continue
 
         vec_dewasa_latih = preprocess_dewasa(img_dewasa)
-        vec_dewasa_uji   = augmentasi_untuk_uji(vec_dewasa_latih)
-        vec_kecil        = preprocess_kecil(img_kecil)
+        vec_dewasa_uji = augmentasi_untuk_uji(vec_dewasa_latih)
+        vec_kecil = preprocess_kecil(img_kecil)
 
         wajah_dewasa_latih.append(vec_dewasa_latih)
         wajah_dewasa_uji.append(vec_dewasa_uji)
@@ -194,18 +194,18 @@ def main():
         print("  ERROR: Tidak ada data berhasil diproses!")
         sys.exit(1)
 
-    X_latih       = np.array(wajah_dewasa_latih, dtype=np.float32)
-    X_test_sama   = np.array(wajah_dewasa_uji,   dtype=np.float32)
-    X_test_lintas = np.array(wajah_kecil_uji,    dtype=np.float32)
-    y             = np.array(labels,             dtype=np.int32)
+    X_latih = np.array(wajah_dewasa_latih, dtype=np.float32)
+    X_test_sama = np.array(wajah_dewasa_uji, dtype=np.float32)
+    X_test_lintas = np.array(wajah_kecil_uji, dtype=np.float32)
+    y = np.array(labels, dtype=np.int32)
 
     np.savez(
         NAMA_OUTPUT,
-        X_latih       = X_latih,
-        X_test_sama   = X_test_sama,
-        X_test_lintas = X_test_lintas,
-        y             = y,
-        nama_anggota  = np.array(nama_anggota),   # tambahan: nama asli
+        X_latih=X_latih,
+        X_test_sama=X_test_sama,
+        X_test_lintas=X_test_lintas,
+        y=y,
+        nama_anggota=np.array(nama_anggota),  # tambahan: nama asli
     )
 
     print("  BERHASIL! File tersimpan.")
@@ -225,17 +225,24 @@ def main():
 
     n_lama = 0
     if os.path.exists(PATH_SELFIE_OLD):
-        n_lama = len([f for f in os.listdir(PATH_SELFIE_OLD)
-                      if os.path.isdir(os.path.join(PATH_SELFIE_OLD, f))])
+        n_lama = len(
+            [
+                f
+                for f in os.listdir(PATH_SELFIE_OLD)
+                if os.path.isdir(os.path.join(PATH_SELFIE_OLD, f))
+            ]
+        )
     print()
     if n_lama > 0:
         print(f"  Info: Dataset lama '{PATH_SELFIE_OLD}' tersedia ({n_lama} orang).")
-        print(f"        Di Colab, aktifkan USE_DATASET_LAMA = True untuk basis training lebih kaya.")
+        print(
+            f"        Di Colab, aktifkan USE_DATASET_LAMA = True untuk basis training lebih kaya."
+        )
     print()
     print("  LANGKAH SELANJUTNYA:")
     print(f"    1. Upload '{NAMA_OUTPUT}' ke Google Colab")
     print(f"    2. Jalankan colab_pca_evaluation.py")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
