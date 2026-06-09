@@ -20,12 +20,16 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.clip(np.dot(a_flat, b_flat) / (norm_a * norm_b), -1.0, 1.0))
 
 def custom_weighted_cosine_sim(w1: np.ndarray, w2: np.ndarray) -> float:
+    """
+    Cosine similarity dengan bobot khusus:
+    - PC 1-3 (indeks 0-2): bobot 0.05 → hampir diabaikan (isinya variansi pencahayaan & usia)
+    - PC 4+ (indeks 3+)  : bobot 1.0  → dipertahankan penuh (isinya struktur tulang)
+    Catatan: PC tinggi (>15) TIDAK dikecilkan karena masih menyimpan detail geometri wajah.
+    """
     weights = np.ones_like(w1)
     if len(weights) > 3:
-        weights[:3] = 0.2
-    if len(weights) > 15:
-        weights[15:] = 0.5
-        
+        weights[:3] = 0.05   # Turunkan drastis, tapi jangan nol supaya tidak menyebabkan degenerate vector
+    
     w1_scaled = w1 * weights
     w2_scaled = w2 * weights
     return cosine_similarity(w1_scaled, w2_scaled)
@@ -87,36 +91,42 @@ def compute_all_metrics(
         "feature_mode"                 : "pixel",
     }
 
-    is_fusion = (
+    # Cek apakah kita perlu jalur fusion LBP/HOG:
+    # Syarat: weights tersedia DAN slider bobot LBP (alpha) dan HOG (beta) keduanya > 0
+    # Kalau alpha + beta == 0, maka user mematikan LBP/HOG (mode lintas usia), gunakan pixel saja.
+    use_fusion = (
         weights1_lbp is not None and weights2_lbp is not None and
-        weights1_hog is not None and weights2_hog is not None
+        weights1_hog is not None and weights2_hog is not None and
+        (alpha + beta) > 0.0
     )
 
-    if is_fusion:
+    if use_fusion:
         s_lbp = S_lbp if S_lbp is not None else np.ones_like(weights1_lbp)
         w1_lbp_s = weights1_lbp / (s_lbp ** 0.5 + 1e-8)
         w2_lbp_s = weights2_lbp / (s_lbp ** 0.5 + 1e-8)
         
-        cos_lbp   = float(custom_weighted_cosine_sim(w1_lbp_s, w2_lbp_s))
-        wl1_clean = w1_lbp_s[3:] if len(w1_lbp_s) > 3 else w1_lbp_s
-        wl2_clean = w2_lbp_s[3:] if len(w2_lbp_s) > 3 else w2_lbp_s
-        d_lbp     = float(np.linalg.norm(wl1_clean - wl2_clean))
+        cos_lbp     = float(custom_weighted_cosine_sim(w1_lbp_s, w2_lbp_s))
+        wl1_clean   = w1_lbp_s[3:] if len(w1_lbp_s) > 3 else w1_lbp_s
+        wl2_clean   = w2_lbp_s[3:] if len(w2_lbp_s) > 3 else w2_lbp_s
+        d_lbp       = float(np.linalg.norm(wl1_clean - wl2_clean))
         penalty_lbp = min(0.05, 0.001 * d_lbp)
-        score_lbp = max(0.0, float(cos_lbp) - penalty_lbp)
+        score_lbp   = max(0.0, float(cos_lbp) - penalty_lbp)
 
         s_hog = S_hog if S_hog is not None else np.ones_like(weights1_hog)
         w1_hog_s = weights1_hog / (s_hog ** 0.5 + 1e-8)
         w2_hog_s = weights2_hog / (s_hog ** 0.5 + 1e-8)
         
-        cos_hog   = float(custom_weighted_cosine_sim(w1_hog_s, w2_hog_s))
-        wh1_clean = w1_hog_s[3:] if len(w1_hog_s) > 3 else w1_hog_s
-        wh2_clean = w2_hog_s[3:] if len(w2_hog_s) > 3 else w2_hog_s
-        d_hog     = float(np.linalg.norm(wh1_clean - wh2_clean))
+        cos_hog     = float(custom_weighted_cosine_sim(w1_hog_s, w2_hog_s))
+        wh1_clean   = w1_hog_s[3:] if len(w1_hog_s) > 3 else w1_hog_s
+        wh2_clean   = w2_hog_s[3:] if len(w2_hog_s) > 3 else w2_hog_s
+        d_hog       = float(np.linalg.norm(wh1_clean - wh2_clean))
         penalty_hog = min(0.05, 0.001 * d_hog)
-        score_hog = max(0.0, float(cos_hog) - penalty_hog)
+        score_hog   = max(0.0, float(cos_hog) - penalty_hog)
 
         total_w   = alpha + beta + gamma
-        composite = (alpha * score_lbp + beta * score_hog + gamma * score_pix) / total_w
+        if total_w == 0:
+            total_w = 1.0
+        composite = np.clip((alpha * score_lbp + beta * score_hog + gamma * score_pix) / total_w, 0.0, 1.0)
 
         result.update({
             "cosine_lbp"     : round(cos_lbp, 4),
@@ -124,11 +134,13 @@ def compute_all_metrics(
             "cosine_hog"     : round(cos_hog, 4),
             "score_hog"      : round(score_hog, 4),
             "score_pix"      : round(score_pix, 4),
-            "composite_score": round(composite, 4),
+            "composite_score": round(float(composite), 4),
             "feature_mode"   : "fusion",
         })
     else:
-        result["composite_score"] = round(score_pix, 4)
+        # Mode Pixel Only (lintas usia): composite = score_pix murni
+        result["composite_score"] = round(float(np.clip(score_pix, 0.0, 1.0)), 4)
+        result["feature_mode"]    = "pixel_only"
 
     return result
 
