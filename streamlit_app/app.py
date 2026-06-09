@@ -351,6 +351,14 @@ with st.sidebar:
         value=False,
         help="Gunakan Aljabar Linear untuk menyuntikkan Vektor Penuaan (ΔW) ke Eigenspace foto masa kecil agar bentuk geometrisnya mendekati struktur wajah dewasa."
     )
+    prob_asian = 0.5
+    if apply_aging_vector:
+        st.sidebar.markdown("### 🧬 Ethnicity-Aware Aging")
+        prob_asian = st.sidebar.slider(
+            "Probabilitas Wajah Asia",
+            0.0, 1.0, 0.8, 0.05,
+            help="1.0 = Full AAF (Asia). 0.0 = Full FG-NET (Kaukasia). Diimplementasikan via Soft Routing/Hybrid Vector."
+        )
     show_eigenfaces = st.toggle("Tampilkan Eigenfaces Dataset", value=True)
     show_math = st.toggle("Penjelasan Matematis", value=True)
     show_svd = st.toggle("Grafik Singular Values", value=True)
@@ -616,7 +624,7 @@ if file1 and file2:
 
         if use_dataset and eigenspace is not None:
             result = analyze_two_faces_with_dataset(
-                face1_proc, face2_proc, eigenspace, apply_aging=apply_aging_vector
+                face1_proc, face2_proc, eigenspace, apply_aging=apply_aging_vector, prob_asian=prob_asian
             )
             f1_disp = result["face1_resized"]
             f2_disp = result["face2_resized"]

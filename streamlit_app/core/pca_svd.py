@@ -361,17 +361,19 @@ def analyze_two_faces_with_dataset(
     face2: np.ndarray,
     eigenspace: dict,
     apply_aging: bool = False,
+    prob_asian: float = None,
 ) -> dict:
     """
     Proyeksikan dua wajah ke Eigenspace.
     Mendukung mode Pixel-only dan LBP+HOG+Pixel Fusion secara otomatis.
-    Jika apply_aging=True, vektor wajah 1 (foto lama) akan disuntik dengan Vektor Penuaan.
+    Jika apply_aging=True, vektor wajah 1 (foto lama) akan disuntik dengan Vektor Penuaan Hybrid.
     """
     from .feature_extractor import (
         extract_hog_features,
         extract_lbp_fast,
         extract_pixel_features,
     )
+    from .ethnicity_classifier import get_hybrid_aging_vector
 
     target_size = eigenspace.get("target_size", (64, 64))
     face1_r = resize_face_for_eigenspace(face1, target_size)
@@ -385,12 +387,23 @@ def analyze_two_faces_with_dataset(
     w1_pix = project_to_eigenspace(f1_pix, ef_pix, mf_pix)
     w2_pix = project_to_eigenspace(f2_pix, ef_pix, mf_pix)
 
-    if apply_aging and "aging_vector_pix" in eigenspace:
+    if apply_aging and ("aging_vector_pix" in eigenspace or "aging_vector_aaf_pix" in eigenspace):
         s_pix = eigenspace.get("singular_values")
         n_samp = eigenspace.get("eigenspace_info", {}).get("dataset_size", 3359)
         if s_pix is not None:
-            unwhiten_scale = s_pix / np.sqrt(max(1, n_samp - 1))
-            w1_pix = w1_pix + (eigenspace["aging_vector_pix"] * unwhiten_scale * 0.35)
+            # Mengambil vektor FGNET dan AAF. Jika belum ada AAF, pakai FGNET sebagai fallback
+            v_fgnet = eigenspace.get("aging_vector_pix", eigenspace.get("aging_vector_fgnet_pix"))
+            v_aaf = eigenspace.get("aging_vector_aaf_pix", v_fgnet)
+            
+            # Jika prob_asian diberikan, hitung hybrid. Jika tidak, pakai yang default
+            if prob_asian is not None and v_aaf is not None and v_fgnet is not None:
+                hybrid_vector = get_hybrid_aging_vector(prob_asian, v_aaf, v_fgnet)
+            else:
+                hybrid_vector = v_fgnet
+                
+            if hybrid_vector is not None:
+                unwhiten_scale = s_pix / np.sqrt(max(1, n_samp - 1))
+                w1_pix = w1_pix + (hybrid_vector * unwhiten_scale * 0.35)
 
     ws_pix = eigenspace.get("whiten_scale")
     if ws_pix is not None:
@@ -434,12 +447,19 @@ def analyze_two_faces_with_dataset(
         w1_lbp = project_to_eigenspace(f1_lbp, ef_lbp, mf_lbp)
         w2_lbp = project_to_eigenspace(f2_lbp, ef_lbp, mf_lbp)
         
-        if apply_aging and "aging_vector_lbp" in eigenspace:
+        if apply_aging and ("aging_vector_lbp" in eigenspace or "aging_vector_aaf_lbp" in eigenspace):
             s_lbp = eigenspace.get("singular_values_lbp")
             if s_lbp is not None:
                 n_samp = eigenspace.get("eigenspace_info", {}).get("dataset_size", 3359)
-                unwhiten_lbp = s_lbp / np.sqrt(max(1, n_samp - 1))
-                w1_lbp = w1_lbp + (eigenspace["aging_vector_lbp"] * unwhiten_lbp * 0.35)
+                v_fgnet_lbp = eigenspace.get("aging_vector_lbp", eigenspace.get("aging_vector_fgnet_lbp"))
+                v_aaf_lbp = eigenspace.get("aging_vector_aaf_lbp", v_fgnet_lbp)
+                if prob_asian is not None and v_aaf_lbp is not None and v_fgnet_lbp is not None:
+                    hybrid_vector_lbp = get_hybrid_aging_vector(prob_asian, v_aaf_lbp, v_fgnet_lbp)
+                else:
+                    hybrid_vector_lbp = v_fgnet_lbp
+                if hybrid_vector_lbp is not None:
+                    unwhiten_lbp = s_lbp / np.sqrt(max(1, n_samp - 1))
+                    w1_lbp = w1_lbp + (hybrid_vector_lbp * unwhiten_lbp * 0.35)
             
         ws_lbp = eigenspace.get("whiten_scale_lbp")
         if ws_lbp is not None:
@@ -455,12 +475,19 @@ def analyze_two_faces_with_dataset(
         mf_hog = eigenspace["mean_hog"]
         w1_hog = project_to_eigenspace(f1_hog, ef_hog, mf_hog)
         
-        if apply_aging and "aging_vector_hog" in eigenspace:
+        if apply_aging and ("aging_vector_hog" in eigenspace or "aging_vector_aaf_hog" in eigenspace):
             s_hog = eigenspace.get("singular_values_hog")
             if s_hog is not None:
                 n_samp = eigenspace.get("eigenspace_info", {}).get("dataset_size", 3359)
-                unwhiten_hog = s_hog / np.sqrt(max(1, n_samp - 1))
-                w1_hog = w1_hog + (eigenspace["aging_vector_hog"] * unwhiten_hog * 0.35)
+                v_fgnet_hog = eigenspace.get("aging_vector_hog", eigenspace.get("aging_vector_fgnet_hog"))
+                v_aaf_hog = eigenspace.get("aging_vector_aaf_hog", v_fgnet_hog)
+                if prob_asian is not None and v_aaf_hog is not None and v_fgnet_hog is not None:
+                    hybrid_vector_hog = get_hybrid_aging_vector(prob_asian, v_aaf_hog, v_fgnet_hog)
+                else:
+                    hybrid_vector_hog = v_fgnet_hog
+                if hybrid_vector_hog is not None:
+                    unwhiten_hog = s_hog / np.sqrt(max(1, n_samp - 1))
+                    w1_hog = w1_hog + (hybrid_vector_hog * unwhiten_hog * 0.35)
         w2_hog = project_to_eigenspace(f2_hog, ef_hog, mf_hog)
         ws_hog = eigenspace.get("whiten_scale_hog")
         if ws_hog is not None:

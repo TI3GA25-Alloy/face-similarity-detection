@@ -51,7 +51,7 @@ def detect_and_crop_face(gray_img: np.ndarray) -> np.ndarray:
         bbox = faces[0]
         aligned_face, success = align_face_lbf(gray_img, bbox, TARGET_SIZE)
         if success:
-            return aligned_face
+            return aligned_face, True
 
         x, y, w, h = bbox
         pad_x, pad_y = int(w * 0.1), int(h * 0.1)
@@ -60,12 +60,13 @@ def detect_and_crop_face(gray_img: np.ndarray) -> np.ndarray:
         x2 = min(gray_img.shape[1], x + w + pad_x)
         y2 = min(gray_img.shape[0], y + h + pad_y)
 
-        return gray_img[y1:y2, x1:x2]
+        return gray_img[y1:y2, x1:x2], True
 
-    return gray_img
+    # Gagal deteksi
+    return gray_img, False
 
 
-def baca_gambar_grayscale_dan_crop(img_path: str) -> np.ndarray | None:
+def baca_gambar_grayscale_dan_crop(img_path: str) -> tuple[np.ndarray | None, bool]:
     """Baca gambar, konversi ke grayscale, lalu deteksi & crop wajahnya."""
     img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
@@ -77,10 +78,11 @@ def baca_gambar_grayscale_dan_crop(img_path: str) -> np.ndarray | None:
         except Exception:
             pass
 
+    wajah_terdeteksi = False
     if img is not None:
-        img = detect_and_crop_face(img)
+        img, wajah_terdeteksi = detect_and_crop_face(img)
 
-    return img
+    return img, wajah_terdeteksi
 
 
 def preprocess_dewasa(img: np.ndarray) -> np.ndarray:
@@ -171,12 +173,17 @@ def main():
         if not path_dewasa or not path_kecil:
             continue
 
-        img_dewasa = baca_gambar_grayscale_dan_crop(path_dewasa)
-        img_kecil = baca_gambar_grayscale_dan_crop(path_kecil)
+        img_dewasa, ok_dewasa = baca_gambar_grayscale_dan_crop(path_dewasa)
+        img_kecil, ok_kecil = baca_gambar_grayscale_dan_crop(path_kecil)
 
         if img_dewasa is None or img_kecil is None:
             print(f"        => GAGAL membaca gambar, lewati.")
             continue
+            
+        if not ok_dewasa:
+            print(f"        [!] Peringatan: Haar Cascade GAGAL deteksi muka di {file_d} (Memakai gambar utuh)")
+        if not ok_kecil:
+            print(f"        [!] Peringatan: Haar Cascade GAGAL deteksi muka di {file_k} (Memakai gambar utuh)")
 
         h_d, w_d = img_dewasa.shape[:2]
         h_k, w_k = img_kecil.shape[:2]

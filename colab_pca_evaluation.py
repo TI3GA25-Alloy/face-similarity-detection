@@ -76,35 +76,38 @@ y_fgnet = []
 age_fgnet = []
 
 try:
-    if not os.path.exists("FGNET"):
+    if not os.path.exists("FGNET.zip"):
         print("   ⏳ Mendownload FGNET.zip (~20MB)...")
         urllib.request.urlretrieve(
             "http://yanweifu.github.io/FG_NET_data/FGNET.zip", "FGNET.zip"
         )
-        print("   ⏳ Mengekstrak FGNET.zip...")
-        with zipfile.ZipFile("FGNET.zip", "r") as zip_ref:
-            zip_ref.extractall("FGNET")
-
-    img_dir = (
-        "FGNET/FGNET/images" if os.path.exists("FGNET/FGNET/images") else "FGNET/images"
-    )
 
     cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
     face_cascade = cv2.CascadeClassifier(cascade_path)
 
-    print("   ⏳ Memproses 1.002 foto FG-NET (Face Detection & Cropping)...")
+    print("   ⏳ Memproses foto FG-NET langsung dari .zip (In-Memory)...")
     offset_fgnet = np.max(y_lfw) + 1 if len(y_lfw) > 0 else np.max(y_olivetti) + 1
 
-    for f in os.listdir(img_dir):
-        if f.lower().endswith((".jpg", ".jpeg", ".png")):
+    if not os.path.exists("lbfmodel.yaml"):
+        print("   ⏳ Downloading lbfmodel.yaml untuk alignment...")
+        urllib.request.urlretrieve("https://raw.githubusercontent.com/kurnianggoro/GSOC2017/master/data/lbfmodel.yaml", "lbfmodel.yaml")
+    
+    facemark = cv2.face.createFacemarkLBF()
+    facemark.loadModel("lbfmodel.yaml")
+
+    with zipfile.ZipFile("FGNET.zip", "r") as archive:
+        image_files = [f for f in archive.namelist() if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+        for f in image_files:
             try:
-                sub_id = int(f[:3]) + offset_fgnet
-                # Parse age, eg: 001A18.JPG -> age = 18
-                age_str = ''.join([c for c in f[3:7] if c.isdigit()])
+                basename = os.path.basename(f)
+                sub_id = int(basename[:3]) + offset_fgnet
+                
+                age_str = ''.join([c for c in basename[3:7] if c.isdigit()])
                 age = int(age_str) if age_str else -1
                 
-                img_path = os.path.join(img_dir, f)
-                img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+                file_data = archive.read(f)
+                img_array = np.frombuffer(file_data, np.uint8)
+                img = cv2.imdecode(img_array, cv2.IMREAD_GRAYSCALE)
                 if img is None:
                     continue
 
@@ -112,13 +115,7 @@ try:
                 if len(faces) > 0:
                     bbox = faces[0]
                     
-                    # Coba SDM Landmark Alignment (LBF)
-                    if not os.path.exists("lbfmodel.yaml"):
-                        print("    Downloading lbfmodel.yaml...")
-                        urllib.request.urlretrieve("https://raw.githubusercontent.com/kurnianggoro/GSOC2017/master/data/lbfmodel.yaml", "lbfmodel.yaml")
-                    
-                    facemark = cv2.face.createFacemarkLBF()
-                    facemark.loadModel("lbfmodel.yaml")
+                    # Langsung fit (model sudah diload di luar loop)
                     ok, landmarks = facemark.fit(img, np.array([[bbox[0], bbox[1], bbox[2], bbox[3]]]))
                     
                     if ok and len(landmarks) > 0:
@@ -167,6 +164,68 @@ except Exception as e:
     print(f"    Gagal memuat FG-NET: {e}")
     X_fgnet = np.empty((0, 10000), dtype=np.float32)
     y_fgnet = np.array([], dtype=np.int32)
+
+
+print("\n STEP 1.8: Memuat AAF (All-Age-Faces) Database...")
+print("   (Dataset Lintas Usia Asia - mendownload dari internet jika belum ada...)")
+
+X_aaf = []
+y_aaf = []
+age_aaf = []
+
+try:
+    if not os.path.exists("AAF.zip"):
+        print("   ⏳ PENTING: Mendownload AAF.zip (~1.25 GB)... Proses ini mungkin memakan waktu lama!")
+        # Dropbox direct link
+        url_aaf = "https://www.dropbox.com/s/a0lj1ddd54ns8qy/All-Age-Faces%20Dataset.zip?dl=1"
+        urllib.request.urlretrieve(url_aaf, "AAF.zip")
+
+    print("   ⏳ Memproses foto AAF langsung dari .zip (In-Memory)...")
+    offset_aaf = np.max(y_fgnet) + 1 if len(y_fgnet) > 0 else (np.max(y_lfw) + 1 if len(y_lfw) > 0 else np.max(y_olivetti) + 1)
+    
+    with zipfile.ZipFile("AAF.zip", "r") as archive:
+        image_files = [f for f in archive.namelist() if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+        
+        # Batasi ke 2000 foto saja agar proses training tidak kehabisan RAM/terlalu lama (opsional)
+        if len(image_files) > 2000:
+            print(f"      Ditemukan {len(image_files)} gambar. Menggunakan 2000 sampel acak untuk training.")
+            random.seed(42)
+            image_files = random.sample(image_files, 2000)
+            
+        for f in image_files:
+            try:
+                basename = os.path.basename(f)
+                # Format: 13322A80.jpg -> ID: 13322, Umur: 80
+                parts = basename.split('A')
+                if len(parts) == 2:
+                    sub_id = int(parts[0]) + offset_aaf
+                    age_str = parts[1].split('.')[0]
+                    age = int(age_str)
+                else:
+                    continue
+                
+                file_data = archive.read(f)
+                img_array = np.frombuffer(file_data, np.uint8)
+                img = cv2.imdecode(img_array, cv2.IMREAD_GRAYSCALE)
+                if img is None:
+                    continue
+
+                # Untuk AAF, kita skip landmark detection berat agar cepat, cukup resize
+                # Karena AAF sudah memiliki versi 'aligned', asumsikan gambar cukup terpusat.
+                img_resized = cv2.resize(img, (100, 100))
+                X_aaf.append((img_resized.astype(np.float32) / 255.0).flatten())
+                y_aaf.append(sub_id)
+                age_aaf.append(age)
+            except:
+                pass
+
+    X_aaf = np.array(X_aaf, dtype=np.float32)
+    y_aaf = np.array(y_aaf, dtype=np.int32)
+    print(f"    AAF    : {X_aaf.shape[0]} foto dari {len(np.unique(y_aaf))} orang")
+except Exception as e:
+    print(f"    Gagal memuat AAF: {e}")
+    X_aaf = np.empty((0, 10000), dtype=np.float32)
+    y_aaf = np.array([], dtype=np.int32)
 
 
 print("\n" + "=" * 65)
@@ -241,13 +300,14 @@ print(f"   Kelompok setelah aug : {X_kel_aug.shape[0]} foto (5x lipat)")
 print("\n" + "=" * 65)
 print(f" STEP 4: Gabungkan data & latih PCA ({N_KOMPONEN_PCA} komponen)...")
 
-X_train_total = np.vstack([X_olivetti, X_lfw, X_fgnet, X_kel_aug])
-y_train_total = np.concatenate([y_olivetti, y_lfw, y_fgnet, y_kel_aug])
+X_train_total = np.vstack([X_olivetti, X_lfw, X_fgnet, X_aaf, X_kel_aug])
+y_train_total = np.concatenate([y_olivetti, y_lfw, y_fgnet, y_aaf, y_kel_aug])
 
 print(f"\n   Komposisi X_train_total:")
 print(f"   • Olivetti      : {X_olivetti.shape[0]} foto")
 print(f"   • LFW           : {X_lfw.shape[0]} foto")
 print(f"   • FG-NET        : {X_fgnet.shape[0]} foto")
+print(f"   • AAF           : {X_aaf.shape[0]} foto")
 print(f"   • Kelompok (aug): {X_kel_aug.shape[0]} foto ({n_anggota} orang × 5)")
 print(
     f"   • TOTAL         : {X_train_total.shape[0]} foto × {X_train_total.shape[1]} fitur"
@@ -296,7 +356,7 @@ variance_total = np.sum(pca.explained_variance_ratio_) * 100
 print(f"\n   ✅ PCA selesai! Variance explained (Pixel): {variance_total:.1f}%")
 print(f"   Dimensi: 10.000 → {N_KOMPONEN_PCA}")
 
-print("   ⏳ Mengekstrak Vektor Injeksi Penuaan (Subspace Aging Vector)...")
+print("   ⏳ Mengekstrak Vektor Injeksi Penuaan (FG-NET)...")
 start_fgnet = len(X_olivetti) + len(X_lfw)
 end_fgnet = start_fgnet + len(X_fgnet)
 
@@ -312,20 +372,55 @@ adult_mask = (age_arr >= 18)
 if np.any(child_mask) and np.any(adult_mask):
     W_child_pix = np.mean(X_fgnet_pca[child_mask], axis=0)
     W_adult_pix = np.mean(X_fgnet_pca[adult_mask], axis=0)
-    aging_vector_pix = W_adult_pix - W_child_pix
+    aging_vector_fgnet_pix = W_adult_pix - W_child_pix
 
     W_child_lbp = np.mean(X_fgnet_lbp_pca[child_mask], axis=0)
     W_adult_lbp = np.mean(X_fgnet_lbp_pca[adult_mask], axis=0)
-    aging_vector_lbp = W_adult_lbp - W_child_lbp
+    aging_vector_fgnet_lbp = W_adult_lbp - W_child_lbp
 
     W_child_hog = np.mean(X_fgnet_hog_pca[child_mask], axis=0)
     W_adult_hog = np.mean(X_fgnet_hog_pca[adult_mask], axis=0)
-    aging_vector_hog = W_adult_hog - W_child_hog
+    aging_vector_fgnet_hog = W_adult_hog - W_child_hog
 else:
-    print("   ⚠️ Peringatan: Tidak ditemukan label anak/dewasa yang valid di FG-NET.")
-    aging_vector_pix = np.zeros(N_KOMPONEN_PCA, dtype=np.float32)
-    aging_vector_lbp = np.zeros(N_KOMPONEN_PCA, dtype=np.float32)
-    aging_vector_hog = np.zeros(N_KOMPONEN_PCA, dtype=np.float32)
+    aging_vector_fgnet_pix = np.zeros(N_KOMPONEN_PCA, dtype=np.float32)
+    aging_vector_fgnet_lbp = np.zeros(N_KOMPONEN_PCA, dtype=np.float32)
+    aging_vector_fgnet_hog = np.zeros(N_KOMPONEN_PCA, dtype=np.float32)
+
+
+print("   ⏳ Mengekstrak Vektor Injeksi Penuaan (AAF)...")
+start_aaf = end_fgnet
+end_aaf = start_aaf + len(X_aaf)
+
+# Proyeksikan AAF ke ruang PCA
+if len(X_aaf) > 0:
+    X_aaf_pca = pca.transform(X_train_total[start_aaf:end_aaf])
+    X_aaf_lbp_pca = pca_lbp.transform(X_train_lbp[start_aaf:end_aaf])
+    X_aaf_hog_pca = pca_hog.transform(X_train_hog[start_aaf:end_aaf])
+
+    age_arr_aaf = np.array(age_aaf)
+    child_mask_aaf = (age_arr_aaf > 0) & (age_arr_aaf <= 12)
+    adult_mask_aaf = (age_arr_aaf >= 18)
+
+    if np.any(child_mask_aaf) and np.any(adult_mask_aaf):
+        W_child_aaf_pix = np.mean(X_aaf_pca[child_mask_aaf], axis=0)
+        W_adult_aaf_pix = np.mean(X_aaf_pca[adult_mask_aaf], axis=0)
+        aging_vector_aaf_pix = W_adult_aaf_pix - W_child_aaf_pix
+
+        W_child_aaf_lbp = np.mean(X_aaf_lbp_pca[child_mask_aaf], axis=0)
+        W_adult_aaf_lbp = np.mean(X_aaf_lbp_pca[adult_mask_aaf], axis=0)
+        aging_vector_aaf_lbp = W_adult_aaf_lbp - W_child_aaf_lbp
+
+        W_child_aaf_hog = np.mean(X_aaf_hog_pca[child_mask_aaf], axis=0)
+        W_adult_aaf_hog = np.mean(X_aaf_hog_pca[adult_mask_aaf], axis=0)
+        aging_vector_aaf_hog = W_adult_aaf_hog - W_child_aaf_hog
+    else:
+        aging_vector_aaf_pix = np.zeros(N_KOMPONEN_PCA, dtype=np.float32)
+        aging_vector_aaf_lbp = np.zeros(N_KOMPONEN_PCA, dtype=np.float32)
+        aging_vector_aaf_hog = np.zeros(N_KOMPONEN_PCA, dtype=np.float32)
+else:
+    aging_vector_aaf_pix = np.zeros(N_KOMPONEN_PCA, dtype=np.float32)
+    aging_vector_aaf_lbp = np.zeros(N_KOMPONEN_PCA, dtype=np.float32)
+    aging_vector_aaf_hog = np.zeros(N_KOMPONEN_PCA, dtype=np.float32)
 
 print(f"    Menyimpan model otak (pretrained_eigenspace.npz) DENGAN LBP, HOG, & AGING VECTOR...")
 np.savez_compressed(
@@ -340,9 +435,15 @@ np.savez_compressed(
     mean_hog=pca_hog.mean_,
     eigenfaces_hog=pca_hog.components_,
     singular_values_hog=pca_hog.singular_values_,
-    aging_vector_pix=aging_vector_pix,
-    aging_vector_lbp=aging_vector_lbp,
-    aging_vector_hog=aging_vector_hog,
+    aging_vector_pix=aging_vector_fgnet_pix,
+    aging_vector_lbp=aging_vector_fgnet_lbp,
+    aging_vector_hog=aging_vector_fgnet_hog,
+    aging_vector_fgnet_pix=aging_vector_fgnet_pix,
+    aging_vector_fgnet_lbp=aging_vector_fgnet_lbp,
+    aging_vector_fgnet_hog=aging_vector_fgnet_hog,
+    aging_vector_aaf_pix=aging_vector_aaf_pix,
+    aging_vector_aaf_lbp=aging_vector_aaf_lbp,
+    aging_vector_aaf_hog=aging_vector_aaf_hog,
     n_samples=np.array([X_train_total.shape[0]]),
     k_components=np.array([pca.n_components_]),
     image_shape=np.array([100, 100]),
