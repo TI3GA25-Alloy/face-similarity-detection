@@ -84,8 +84,9 @@ def preprocess_dewasa(img: np.ndarray) -> np.ndarray:
     """
     Preprocessing untuk foto dewasa:
     Grayscale → CLAHE → Resize 100x100 → Normalize [0,1] → Flatten
+    CLAHE diselaraskan dengan face_utils.py di Streamlit agar konsisten.
     """
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(16, 16))
     img   = clahe.apply(img)
     img   = cv2.resize(img, TARGET_SIZE, interpolation=cv2.INTER_AREA)
     return (img.astype(np.float32) / 255.0).flatten()
@@ -96,8 +97,9 @@ def preprocess_kecil(img: np.ndarray) -> np.ndarray:
     Preprocessing untuk foto masa kecil (lintas usia):
     Grayscale → CLAHE → Gaussian Blur → Resize 100x100 → Gamma → Normalize → Flatten
     Gamma 1.2 = menerangkan foto lama yang cenderung gelap.
+    CLAHE diselaraskan dengan face_utils.py di Streamlit agar konsisten.
     """
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(16, 16))
     img   = clahe.apply(img)
     img   = cv2.GaussianBlur(img, (3, 3), sigmaX=0.5)
     img   = cv2.resize(img, TARGET_SIZE, interpolation=cv2.INTER_AREA)

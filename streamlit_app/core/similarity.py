@@ -92,9 +92,6 @@ def compute_all_metrics(
         "feature_mode"                 : "pixel",
     }
 
-    # Cek apakah kita perlu jalur fusion LBP/HOG:
-    # Syarat: weights tersedia DAN slider bobot LBP (alpha) dan HOG (beta) keduanya > 0
-    # Kalau alpha + beta == 0, maka user mematikan LBP/HOG (mode lintas usia), gunakan pixel saja.
     use_fusion = (
         weights1_lbp is not None and weights2_lbp is not None and
         weights1_hog is not None and weights2_hog is not None and
