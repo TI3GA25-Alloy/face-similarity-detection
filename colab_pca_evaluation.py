@@ -5,10 +5,16 @@ import random
 import tarfile
 import urllib.request
 import zipfile
+import os
+import random
+import tarfile
+import urllib.request
+import zipfile
 
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+from skimage.feature import hog, local_binary_pattern
 from skimage.feature import hog, local_binary_pattern
 from sklearn.datasets import fetch_lfw_people, fetch_olivetti_faces
 from sklearn.decomposition import PCA
