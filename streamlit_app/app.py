@@ -1136,7 +1136,7 @@ else:
     """,
         unsafe_allow_html=True,
     )
-    
+
 st.markdown(
     """
 <div style="text-align:center;margin-top:4rem;padding-top:2rem;border-top:1px solid rgba(255,255,255,0.06)">
