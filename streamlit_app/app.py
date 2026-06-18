@@ -57,8 +57,15 @@ st.markdown(
     --border: rgba(31, 41, 55, 1);
 }
 
-html, body, .stApp { background: var(--bg-primary) !important; font-family: 'Inter', sans-serif; }
-.main .block-container { padding: 1.5rem 2rem 3rem; max-width: 1200px; }
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"] { 
+    background: var(--bg-primary) !important; 
+    font-family: 'Inter', sans-serif; 
+    overflow-x: hidden !important; 
+}
+.main .block-container { padding: 1.5rem 1rem 3rem; max-width: 1200px; }
+@media (min-width: 768px) {
+    .main .block-container { padding: 1.5rem 2rem 3rem; }
+}
 
 @keyframes gradient {
     to { background-position: 200% center; }
@@ -66,15 +73,18 @@ html, body, .stApp { background: var(--bg-primary) !important; font-family: 'Int
 
 .app-header {
     position: relative;
-    padding: 3rem 0;
-    margin-bottom: 2rem;
+    padding: 2rem 0;
+    margin-bottom: 1.5rem;
     text-align: center;
     border-bottom: 1px solid transparent;
     border-image: linear-gradient(to right, transparent, rgba(99, 102, 241, 0.25), transparent) 1;
 }
+@media (min-width: 768px) {
+    .app-header { padding: 3rem 0; margin-bottom: 2rem; }
+}
 
 .app-title {
-    font-size: 3.5rem;
+    font-size: 2rem;
     font-weight: 800;
     background: linear-gradient(to right, #e5e7eb, #c7d2fe, #f9fafb, #a5b4fc, #e5e7eb);
     background-size: 200% auto;
@@ -84,6 +94,9 @@ html, body, .stApp { background: var(--bg-primary) !important; font-family: 'Int
     margin: 0 0 1rem;
     line-height: 1.1;
     letter-spacing: -0.02em;
+}
+@media (min-width: 768px) {
+    .app-title { font-size: 3.5rem; }
 }
 
 .badge-row { display: flex; gap: 0.5rem; margin-top: 1.5rem; flex-wrap: wrap; justify-content: center; }
@@ -113,7 +126,10 @@ html, body, .stApp { background: var(--bg-primary) !important; font-family: 'Int
     padding: 1.5rem; margin-bottom: 1rem;
 }
 
-.result-card { border-radius: 24px; padding: 2.5rem; text-align: center; margin: 1.5rem 0; backdrop-filter: blur(8px); }
+.result-card { border-radius: 24px; padding: 1.5rem; text-align: center; margin: 1.5rem 0; backdrop-filter: blur(8px); }
+@media (min-width: 768px) {
+    .result-card { padding: 2.5rem; }
+}
 .result-same { background: rgba(17, 24, 39, 0.4); border: 1px solid rgba(16, 185, 129, 0.3); box-shadow: 0 0 40px -10px rgba(16, 185, 129, 0.2); }
 .result-diff { background: rgba(17, 24, 39, 0.4); border: 1px solid rgba(239, 68, 68, 0.3); box-shadow: 0 0 40px -10px rgba(239, 68, 68, 0.2); }
 
