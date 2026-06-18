@@ -20,7 +20,7 @@ def extract_lbp_features(image: np.ndarray, P: int = 8, R: int = 1) -> np.ndarra
     angles = [2 * np.pi * p / P for p in range(P)]
     for y in range(R, H - R):
         for x in range(R, W - R):
-            ce43nter = int(img_uint8[y, x])
+            center = int(img_uint8[y, x])
             code = 0
             for p, angle in enumerate(angles):
                 nx = x + R * np.cos(angle)

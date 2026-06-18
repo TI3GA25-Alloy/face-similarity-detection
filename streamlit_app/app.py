@@ -33,7 +33,7 @@ from PIL import Image
 
 st.set_page_config(
     page_title="FaceMatch PCA/SVD + Dataset",
-    page_icon="🔬",
+    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -174,11 +174,11 @@ st.markdown(
       Deteksi Kemiripan Foto Lama vs Foto Baru menggunakan implementasi Edge-PCA Aljabar Linear + Euclidean Tie-Breaker.
     </div>
     <div class="badge-row">
-      <span class="badge">📐 Aljabar Linear</span>
-      <span class="badge">🧮 Sobel Edge</span>
-      <span class="badge">🔢 SVD</span>
-      <span class="badge">⚖️ Pinalti Euclidean</span>
-      <span class="badge">📊 PCA</span>
+      <span class="badge">Aljabar Linear</span>
+      <span class="badge">Sobel Edge</span>
+      <span class="badge">SVD</span>
+      <span class="badge">Pinalti Euclidean</span>
+      <span class="badge">PCA</span>
     </div>
   </div>
 </div>
@@ -237,15 +237,17 @@ LANG_DICT = {
     "EN": {
         "title": "FaceMatch Edge-PCA & SVD",
         "subtitle": "Cross-Age Face Verification using Classical Linear Algebra + Euclidean Tie-Breaker.",
-        "sidebar_dataset": "📦 Eigenspace Dataset",
+        "sidebar_dataset": "Eigenspace Dataset",
         "sidebar_dataset_choice": "Choose training dataset:",
-        "sidebar_params": "⚙️ Parameters",
-        "sidebar_lang": "🌐 Language",
+        "sidebar_params": "Parameters",
+        "sidebar_lang": "Language",
         "threshold_label": "Similarity Threshold",
         "penalty_label": "Euclidean Penalty Factor",
         "target_size_label": "Resize Dimension",
         "upload_old": "Upload Old Photo",
         "upload_new": "Upload New Photo",
+        "preview_old": "Preview Old Photo",
+        "preview_new": "Preview New Photo",
         "btn_analyze": "Analyze Similarity",
         "sec_01": "Section 01: Primary Similarity Results",
         "sec_02": "Section 02: Pixel Matrix Representation",
@@ -258,15 +260,17 @@ LANG_DICT = {
     "ID": {
         "title": "FaceMatch Edge-PCA & SVD",
         "subtitle": "Deteksi Kemiripan Foto Lama vs Foto Baru menggunakan implementasi Edge-PCA Aljabar Linear + Euclidean Tie-Breaker.",
-        "sidebar_dataset": "📦 Dataset Eigenspace",
+        "sidebar_dataset": "Dataset Eigenspace",
         "sidebar_dataset_choice": "Pilih dataset training:",
-        "sidebar_params": "⚙️ Parameter",
-        "sidebar_lang": "🌐 Bahasa",
+        "sidebar_params": "Parameter",
+        "sidebar_lang": "Bahasa",
         "threshold_label": "Ambang Batas Kemiripan",
         "penalty_label": "Faktor Penalti Euclidean",
         "target_size_label": "Ukuran Resize",
         "upload_old": "Unggah Foto Lama",
         "upload_new": "Unggah Foto Baru",
+        "preview_old": "Pratinjau Foto Lama",
+        "preview_new": "Pratinjau Foto Baru",
         "btn_analyze": "Analisis Kemiripan",
         "sec_01": "Bagian 01: Hasil Similarity Utama",
         "sec_02": "Bagian 02: Representasi Matriks Piksel",
@@ -279,7 +283,7 @@ LANG_DICT = {
 }
 
 with st.sidebar:
-    lang = st.selectbox("🌐 Language / Bahasa", ["ID", "EN"])
+    lang = st.selectbox("Language / Bahasa", ["ID", "EN"])
     T = LANG_DICT[lang]
 
     st.markdown(f"## {T['sidebar_dataset']}")
@@ -347,24 +351,28 @@ with st.sidebar:
 
     detect_face_opt = st.toggle("Auto Deteksi Wajah", value=True)
     apply_aging_vector = st.toggle(
-        "🔬 Injeksi Vektor Penuaan (Foto Lama)", 
+        "Injeksi Vektor Penuaan (Foto Lama)", 
         value=False,
-        help="Gunakan Aljabar Linear untuk menyuntikkan Vektor Penuaan (ΔW) ke Eigenspace foto masa kecil agar bentuk geometrisnya mendekati struktur wajah dewasa."
+        help="Gunakan Aljabar Linear untuk menyuntikkan Vektor Penuaan ke Eigenspace foto masa kecil agar bentuk geometrisnya mendekati struktur wajah dewasa."
     )
     prob_asian = 0.5
+    aging_scale = 0.0
     if apply_aging_vector:
-        st.sidebar.markdown("### 🧬 Ethnicity-Aware Aging")
+        st.sidebar.markdown("### Ethnicity-Aware Aging")
         prob_asian = st.sidebar.slider(
             "Probabilitas Wajah Asia",
             0.0, 1.0, 0.8, 0.05,
-            help="1.0 = Full AAF (Asia). 0.0 = Full FG-NET (Kaukasia). Diimplementasikan via Soft Routing/Hybrid Vector."
+            help="1.0 = Full AAF (Asia). 0.0 = Full FG-NET (Kaukasia)."
+        )
+        aging_scale = st.sidebar.slider(
+            "Skala Penuaan (Aging Scale)",
+            0.0, 2.0, 0.25, 0.05,
+            help="Faktor skala untuk menyuntikkan vektor penuaan. Nilai optimal biasanya 0.1 - 0.3."
         )
     show_eigenfaces = st.toggle("Tampilkan Eigenfaces Dataset", value=True)
-    show_math = st.toggle("Penjelasan Matematis", value=True)
-    show_svd = st.toggle("Grafik Singular Values", value=True)
 
     st.divider()
-    st.markdown("## 📚 Kenapa Butuh Dataset?")
+    st.markdown("## Kenapa Butuh Dataset?")
     st.markdown("""
 Eigenspace dari **2 gambar saja**:
 - Max 2 komponen
@@ -411,8 +419,7 @@ def get_eigenspace_lfw(k):
 
 
 @st.cache_resource(show_spinner=False)
-def get_eigenspace_custom(k):
-    # Coba muat model pre-trained (Colab)
+def get_eigenspace_custom(k, mtime=0):
     model_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "pretrained_eigenspace.npz",
@@ -434,11 +441,10 @@ def get_eigenspace_custom(k):
         "Selfie & id data - public sample",
     )
     data = load_custom_selfie_dataset(base_path, target_size=(128, 128))
-    if data is None:
-        return None, None
-    eigenspace = build_eigenspace_from_dataset(
-        data["images"], n_components=k, target_size=(128, 128)
-    )
+    if data is not None:
+        eigenspace = build_eigenspace_from_dataset(
+            data["images"], n_components=k, target_size=(128, 128)
+        )
     return data, eigenspace
 
 
@@ -449,7 +455,12 @@ eigenspace = None
 if use_dataset:
     with st.spinner("Memuat dataset & membangun eigenspace..."):
         if "Lokal" in dataset_choice:
-            dataset_data, eigenspace = get_eigenspace_custom(n_components)
+            model_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "pretrained_eigenspace.npz",
+            )
+            mtime = os.path.getmtime(model_path) if os.path.exists(model_path) else 0
+            dataset_data, eigenspace = get_eigenspace_custom(n_components, mtime)
             if eigenspace is None:
                 st.warning("Dataset lokal tidak ditemukan. Beralih ke Olivetti.")
                 dataset_data, eigenspace = get_eigenspace_olivetti(n_components)
@@ -470,13 +481,13 @@ if use_dataset and dataset_data and eigenspace:
     img_shape = dataset_data.get("image_shape", (64, 64))
 
     st.markdown(
-        '<div class="section-title">📦 Dataset Eigenspace</div>', unsafe_allow_html=True
+        '<div class="section-title">Dataset Eigenspace</div>', unsafe_allow_html=True
     )
     st.markdown(
         f"""
     <div class="dataset-card">
       <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem">
-        <span style="font-size:1.5rem">✅</span>
+        <span style="font-weight:700;color:#10b981">OK</span>
         <div>
           <div style="font-weight:700;color:#f1f5f9">{dataset_data.get("source", "Dataset")}</div>
           <div style="font-size:0.8rem;color:#64748b">{dataset_data.get("description", "")[:120]}...</div>
@@ -516,7 +527,7 @@ if use_dataset and dataset_data and eigenspace:
 
     if show_eigenfaces:
         st.markdown(
-            '<div class="section-title">👁️ Eigenfaces dari Dataset</div>',
+            '<div class="section-title">Eigenfaces dari Dataset</div>',
             unsafe_allow_html=True,
         )
 
@@ -565,20 +576,20 @@ if use_dataset and dataset_data and eigenspace:
         plt.close(fig)
 
         st.markdown("""
-        > 💡 **Catatan:** Eigenface #1 menangkap pola dengan *variance terbesar* (fitur paling umum semua wajah).
+        > **Catatan:** Eigenface #1 menangkap pola dengan *variance terbesar* (fitur paling umum semua wajah).
         > Eigenface-eigenface selanjutnya menangkap pola yang makin spesifik & kecil.
         > Kombinasi dari semua eigenface merepresentasikan "bahasa" wajah manusia.
         """)
 
 st.markdown(
-    f'<div class="section-title">📸 {T.get("upload_title", "Upload Foto")}</div>',
+    f'<div class="section-title">{T.get("upload_title", "Upload Foto")}</div>',
     unsafe_allow_html=True,
 )
 
 col1, col2 = st.columns(2, gap="large")
 with col1:
     st.markdown(
-        f'<div style="font-size:0.75rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;margin-bottom:0.5rem">📷 {T["upload_old"]}</div>',
+        f'<div style="font-size:0.75rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;margin-bottom:0.5rem">{T["upload_old"]}</div>',
         unsafe_allow_html=True,
     )
     file1 = st.file_uploader(
@@ -587,9 +598,11 @@ with col1:
         key="photo_old",
         label_visibility="collapsed",
     )
+    if file1 is not None:
+        st.image(file1, caption=T["preview_old"], use_container_width=True)
 with col2:
     st.markdown(
-        f'<div style="font-size:0.75rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;margin-bottom:0.5rem">📱 {T["upload_new"]}</div>',
+        f'<div style="font-size:0.75rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;margin-bottom:0.5rem">{T["upload_new"]}</div>',
         unsafe_allow_html=True,
     )
     file2 = st.file_uploader(
@@ -598,6 +611,8 @@ with col2:
         key="photo_new",
         label_visibility="collapsed",
     )
+    if file2 is not None:
+        st.image(file2, caption=T["preview_new"], use_container_width=True)
 
 if file1 and file2:
     with st.spinner("Memproses gambar & menjalankan PCA/SVD..."):
@@ -624,25 +639,26 @@ if file1 and file2:
 
         if use_dataset and eigenspace is not None:
             result = analyze_two_faces_with_dataset(
-                face1_proc, face2_proc, eigenspace, apply_aging=apply_aging_vector, prob_asian=prob_asian
+                face1_proc, face2_proc, eigenspace,
+                apply_aging=apply_aging_vector, prob_asian=prob_asian, aging_scale=aging_scale
             )
-            f1_disp = result["face1_resized"]
-            f2_disp = result["face2_resized"]
+            face1_display = result["face1_resized"]
+            face2_display = result["face2_resized"]
             m_label = "Dataset: " + dataset_data.get("source", "")[:40]
         else:
             olivetti_data, olivetti_es = get_eigenspace_olivetti(n_components)
             if olivetti_es is not None:
                 result = analyze_two_faces_with_dataset(
                     face1_proc, face2_proc, olivetti_es,
-                    apply_aging=apply_aging_vector, prob_asian=prob_asian
+                    apply_aging=apply_aging_vector, prob_asian=prob_asian, aging_scale=aging_scale
                 )
-                f1_disp = result["face1_resized"]
-                f2_disp = result["face2_resized"]
+                face1_display = result["face1_resized"]
+                face2_display = result["face2_resized"]
                 m_label = "Dataset: Olivetti Faces (fallback)"
             else:
                 result = analyze_two_faces(face1_proc, face2_proc)
-                f1_disp = face1_proc
-                f2_disp = face2_proc
+                face1_display = face1_proc
+                face2_display = face2_proc
                 m_label = "Mode: 2 gambar saja (tanpa dataset)"
 
         w1 = result["weights_face1"]
@@ -661,8 +677,8 @@ if file1 and file2:
         metrics = compute_all_metrics(
             w1,
             w2,
-            f1_disp,
-            f2_disp,
+            face1_display,
+            face2_display,
             S_joint,
             penalty_factor=penalty_factor,
             alpha=alpha_lbp,
@@ -674,11 +690,6 @@ if file1 and file2:
         mode_label = f"{m_label} | Rotasi: 0.0° | Cermin: Tidak"
         decision = make_decision(metrics, threshold=threshold)
 
-        face1_display = result["face1_resized"] if use_dataset else face1_proc
-        face2_display = result["face2_resized"] if use_dataset else face2_proc
-
-        w1 = result["weights_face1"]
-        w2 = result["weights_face2"]
         U1, S1, Vt1 = (
             result["svd_face1"]["U"],
             result["svd_face1"]["S"],
@@ -691,7 +702,7 @@ if file1 and file2:
         )
 
     st.markdown(
-        f'<div class="section-title">🎯 {T.get("sec_01", "Section 01: Primary Similarity Results")}</div>',
+        f'<div class="section-title">{T.get("sec_01", "Section 01: Primary Similarity Results")}</div>',
         unsafe_allow_html=True,
     )
 
@@ -704,7 +715,6 @@ if file1 and file2:
     st.markdown(
         f"""
     <div class="result-card {r_class}">
-      <div style="font-size:3rem;margin-bottom:0.5rem">{"&#x2705;" if is_same else "&#x274c;"}</div>
       <div style="font-size:1.5rem;font-weight:800;color:{s_color};margin-bottom:0.3rem">{verdict_display}</div>
       <div style="font-size:3.5rem;font-weight:900;color:{s_color};line-height:1;margin:0.5rem 0">{score:.1%}</div>
       <div style="color:#64748b;font-size:0.85rem;margin-bottom:0.75rem">Composite Score (Edge-PCA + Pinalti Euclidean)</div>
@@ -728,7 +738,7 @@ if file1 and file2:
     )
 
     st.markdown(
-        f'<div class="section-title">🛠️ {T.get("sec_prep", "Preprocessing Pipeline")}</div>',
+        f'<div class="section-title">{T.get("sec_prep", "Preprocessing Pipeline")}</div>',
         unsafe_allow_html=True,
     )
 
@@ -759,7 +769,7 @@ if file1 and file2:
                     )
                     if i < len(step_names) - 1 and key != "final":
                         st.markdown(
-                            "<div style='text-align:center;color:#6366f1'>⬇️</div>",
+                            "<div style='text-align:center;color:#6366f1'>v</div>",
                             unsafe_allow_html=True,
                         )
 
@@ -770,7 +780,7 @@ if file1 and file2:
     import pandas as pd
 
     st.markdown(
-        f'<div class="section-title">🔢 {T.get("sec_02", "Section 02: Pixel Matrix Representation")}</div>',
+        f'<div class="section-title">{T.get("sec_02", "Section 02: Pixel Matrix Representation")}</div>',
         unsafe_allow_html=True,
     )
     st.markdown(
@@ -801,7 +811,7 @@ if file1 and file2:
         )
 
     st.markdown(
-        f'<div class="section-title">📊 {T.get("sec_03", "Section 03: PCA & Eigenspace")}</div>',
+        f'<div class="section-title">{T.get("sec_03", "Section 03: PCA & Eigenspace")}</div>',
         unsafe_allow_html=True,
     )
     if use_dataset and eigenspace is not None:
@@ -852,7 +862,7 @@ if file1 and file2:
         )
 
     st.markdown(
-        f'<div class="section-title">🖼️ {T.get("sec_04", "Section 04: SVD Reconstruction")}</div>',
+        f'<div class="section-title">{T.get("sec_04", "Section 04: SVD Reconstruction")}</div>',
         unsafe_allow_html=True,
     )
     st.markdown(
@@ -903,7 +913,7 @@ if file1 and file2:
         display_svd_recon(face2_display, U2, S2, Vt2, T["upload_new"])
 
     st.markdown(
-        f'<div class="section-title">📐 {T.get("sec_05", "Section 05: Vector Projection")}</div>',
+        f'<div class="section-title">{T.get("sec_05", "Section 05: Vector Projection")}</div>',
         unsafe_allow_html=True,
     )
     st.markdown(f"*{T.get('sec_04_desc', 'Bobot proyeksi PCA ke dalam Eigenspace.')}*")
@@ -960,16 +970,16 @@ if file1 and file2:
         plt.close(fig)
 
     st.markdown(
-        f'<div class="section-title">🔬 {T.get("sec_06", "Section 06: Advanced Analysis")}</div>',
+        f'<div class="section-title">{T.get("sec_06", "Section 06: Advanced Analysis")}</div>',
         unsafe_allow_html=True,
     )
 
     tab_hm, tab_hist, tab_pc, tab_svd = st.tabs(
         [
-            "🔥 Heatmap Selisih",
-            "📊 Histogram Piksel",
-            "📉 Kurva PCA",
-            "📈 Singular Values",
+            "Heatmap Selisih",
+            "Histogram Piksel",
+            "Kurva PCA",
+            "Singular Values",
         ]
     )
 
@@ -1048,7 +1058,7 @@ if file1 and file2:
         plt.close(fig_s)
 
     st.markdown(
-        f'<div class="section-title">📄 {T.get("sec_07", "Section 07: Dynamic Report")}</div>',
+        f'<div class="section-title">{T.get("sec_07", "Section 07: Dynamic Report")}</div>',
         unsafe_allow_html=True,
     )
 
@@ -1092,12 +1102,12 @@ if file1 and file2:
 
     if is_same == False and apply_aging_vector:
         report_text += f"""
-    
-    ## 📚 Catatan Akademis (Analisis Kegagalan Lintas-Usia)
+
+    ## Catatan Akademis (Analisis Kegagalan Lintas-Usia)
     Berdasarkan hasil eksperimen, sistem menghasilkan skor Cosine Similarity di bawah ambang batas identifikasi yang dapat diterima. Temuan ini **bukan** merupakan indikasi kesalahan implementasi, melainkan manifestasi empiris dari dua batasan struktural yang melekat pada paradigma *Classical Machine Learning* (PCA/Eigenfaces):
     
     1. **Non-Ekuivarians Translasi pada Representasi Holistik:** PCA dan HOG beroperasi pada representasi piksel global dalam grid yang tetap (tidak memiliki properti *translation equivariance*). Konsekuensinya, ketidakakuratan lokalisasi wajah oleh *Haar Cascade* (pergeseran koordinat mata/translasi piksel) ditransmisikan langsung sebagai *noise* sistematis ke dalam ruang fitur PCA, yang menurunkan skor similaritas secara artifisial.
-    2. **Degenerasi Identitas akibat Vektor Penuaan Global:** Vektor penuaan ($\Delta W$) yang diekstrak secara global dari dataset FG-NET merepresentasikan trayektori penuaan rata-rata (populasi umum), bukan trayektori spesifik individu. Injeksi vektor ini memang berhasil mengubah umur wajah, namun secara bersamaan menggeser proyeksi subjek menjauhi identitas uniknya dan mendekati wajah rata-rata populasi.
+    2. **Degenerasi Identitas akibat Vektor Penuaan Global:** Vektor penuaan (\\Delta W) yang diekstrak secara global dari dataset FG-NET merepresentasikan trayektori penuaan rata-rata (populasi umum), bukan trayektori spesifik individu. Injeksi vektor ini memang berhasil mengubah umur wajah, namun secara bersamaan menggeser proyeksi subjek menjauhi identitas uniknya dan mendekati wajah rata-rata populasi.
     
     **Kesimpulan:** 
     Temuan ini secara empiris menjustifikasi mengapa transisi paradigma dari metode klasik ke *Deep Learning* (CNN / Metric Learning) merupakan sebuah keharusan arsitektural untuk menyelesaikan masalah Lintas-Usia secara utuh (mencapai *pose & translation invariance*). Sistem ini berhasil membuktikan *upper bound experiment* dari kapabilitas maksimal metode Aljabar Linear klasik.
@@ -1106,18 +1116,16 @@ if file1 and file2:
     st.markdown(f'<div class="math-box">{report_text}</div>', unsafe_allow_html=True)
 
     st.download_button(
-        label="📥 Download Report (.txt)",
+        label="Download Report (.txt)",
         data=report_text,
         file_name="facematch_report.txt",
         mime="text/plain",
-        width="stretch",
     )
 
 else:
     st.markdown(
         """
     <div style="text-align:center;padding:4rem 2rem;background:#111827;border:2px dashed rgba(139,92,246,0.25);border-radius:20px;margin-top:1rem">
-      <div style="font-size:3rem;margin-bottom:1rem">🔬</div>
       <h3 style="color:#e2e8f0;margin-bottom:0.5rem">Upload Dua Foto untuk Memulai</h3>
       <p style="max-width:500px;margin:0 auto;color:#475569;font-size:0.9rem">
         Upload <strong style="color:#a78bfa">Foto Lama</strong> (masa kecil) dan
@@ -1128,7 +1136,7 @@ else:
     """,
         unsafe_allow_html=True,
     )
-
+    
 st.markdown(
     """
 <div style="text-align:center;margin-top:4rem;padding-top:2rem;border-top:1px solid rgba(255,255,255,0.06)">

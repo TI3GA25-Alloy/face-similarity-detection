@@ -392,6 +392,12 @@ def analyze_two_faces_with_dataset(
                 centered = w.astype(float) - mean_d
                 coeffs = centered @ comps.T
                 return mean_d + coeffs @ comps
+        
+        v_fg = eigenspace.get(f"aging_vector_fgnet_{mod_key}")
+        v_as = eigenspace.get(f"aging_vector_aaf_{mod_key}")
+        if v_fg is not None and v_as is not None and prob_asian is not None:
+            return (1.0 - prob_asian) * v_fg + prob_asian * v_as
+
         # Fallback: global average aging vector
         v_fgnet = eigenspace.get(f"aging_vector_{mod_key}",
                     eigenspace.get(f"aging_vector_fgnet_{mod_key}",

@@ -3,8 +3,10 @@ import cv2
 from skimage import feature
 
 def extract_hog(image):
-    hog_features = feature.hog(image, orientations=8, pixels_per_cell=(8, 8),
-                               cells_per_block=(2, 2), block_norm="L2-Hys", visualize=False)
+    hog_features = feature.hog(
+        image, orientations=8, pixels_per_cell=(8, 8),
+        cells_per_block=(2, 2), block_norm="L2-Hys", visualize=False
+        )
     return hog_features
 
 def evaluate_hog():

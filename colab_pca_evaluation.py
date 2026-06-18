@@ -12,6 +12,8 @@ import urllib.request
 import zipfile
 
 import cv2
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 from skimage.feature import hog, local_binary_pattern
@@ -299,16 +301,32 @@ print(f"   Kelompok setelah aug : {X_kel_aug.shape[0]} foto (5x lipat)")
 
 
 print("\n" + "=" * 65)
+print(" STEP 3.5: Memuat dataset FairFace SEA...")
+try:
+    fairface_data = np.load("fairface_sea_100x100.npz")
+    X_fairface = fairface_data["images"].reshape(-1, 10000).astype(np.float32) / 255.0
+    
+    offset_fairface = np.max(y_aaf) + 1 if len(y_aaf) > 0 else (np.max(y_fgnet) + 1 if len(y_fgnet) > 0 else (np.max(y_lfw) + 1 if len(y_lfw) > 0 else np.max(y_olivetti) + 1))
+    y_fairface = np.arange(len(X_fairface), dtype=np.int32) + offset_fairface
+    print(f"   FairFace SEA : {X_fairface.shape[0]} foto Asia Tenggara berhasil dimuat")
+except FileNotFoundError:
+    print("   Warning: File 'fairface_sea_100x100.npz' tidak ditemukan! Melanjutkan tanpa FairFace SEA.")
+    X_fairface = np.empty((0, 10000), dtype=np.float32)
+    y_fairface = np.array([], dtype=np.int32)
+
+
+print("\n" + "=" * 65)
 print(f" STEP 4: Gabungkan data & latih PCA ({N_KOMPONEN_PCA} komponen)...")
 
-X_train_total = np.vstack([X_olivetti, X_lfw, X_fgnet, X_aaf, X_kel_aug])
-y_train_total = np.concatenate([y_olivetti, y_lfw, y_fgnet, y_aaf, y_kel_aug])
+X_train_total = np.vstack([X_olivetti, X_lfw, X_fgnet, X_aaf, X_fairface, X_kel_aug])
+y_train_total = np.concatenate([y_olivetti, y_lfw, y_fgnet, y_aaf, y_fairface, y_kel_aug])
 
 print(f"\n   Komposisi X_train_total:")
 print(f"   • Olivetti      : {X_olivetti.shape[0]} foto")
 print(f"   • LFW           : {X_lfw.shape[0]} foto")
 print(f"   • FG-NET        : {X_fgnet.shape[0]} foto")
 print(f"   • AAF           : {X_aaf.shape[0]} foto")
+print(f"   • FairFace SEA  : {X_fairface.shape[0]} foto")
 print(f"   • Kelompok (aug): {X_kel_aug.shape[0]} foto ({n_anggota} orang × 5)")
 print(
     f"   • TOTAL         : {X_train_total.shape[0]} foto × {X_train_total.shape[1]} fitur"
